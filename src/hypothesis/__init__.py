@@ -1,4 +1,8 @@
-"""Statistical hypothesis testing module."""
+"""
+Statistical hypothesis testing module.
+
+Copyright (c) 2025 L.Bassetti
+"""
 
 from .tests import (
     bootstrap_cvar_test,

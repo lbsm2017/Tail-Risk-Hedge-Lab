@@ -1,6 +1,7 @@
 """
 Correlation Analysis Module
 
+Copyright (c) 2025 L.Bassetti
 Implements conditional correlations, downside beta, and tail dependence measures.
 """
 

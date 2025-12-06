@@ -1,6 +1,7 @@
 """
 Data Downloader Module
 
+Copyright (c) 2025 L.Bassetti
 Downloads and caches price data from Yahoo Finance for tail-risk hedging analysis.
 Handles data alignment, missing values, and computes returns.
 """

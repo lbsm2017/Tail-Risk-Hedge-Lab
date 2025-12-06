@@ -1,4 +1,8 @@
-"""Portfolio optimization and weight finding module."""
+"""
+Portfolio optimization and weight finding module.
+
+Copyright (c) 2025 L.Bassetti
+"""
 
 from .weight_finder import (
     find_weight_for_target_reduction,

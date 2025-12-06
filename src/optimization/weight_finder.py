@@ -1,6 +1,7 @@
 """
 Weight Optimization Module
 
+Copyright (c) 2025 L.Bassetti
 Finds optimal hedge weights to achieve target risk reduction levels.
 Weights float freely within constraints to hit CVaR/MDD reduction targets.
 """

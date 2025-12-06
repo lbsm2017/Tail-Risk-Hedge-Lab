@@ -1,6 +1,7 @@
 """
 Statistical Hypothesis Testing Module
 
+Copyright (c) 2025 L.Bassetti
 Implements bootstrap tests and safe-haven regression analysis.
 Optimized with vectorized numpy operations for performance.
 """

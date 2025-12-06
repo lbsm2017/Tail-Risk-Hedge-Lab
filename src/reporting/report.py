@@ -1,6 +1,7 @@
 """
 Reporting Module - Investment Banking Research Style
 
+Copyright (c) 2025 L.Bassetti
 Generates professional HTML reports for tail-risk hedge analysis.
 Includes embedded charts for rolling correlations.
 """

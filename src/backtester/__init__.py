@@ -1,4 +1,8 @@
-"""Main backtesting engine module."""
+"""
+Main backtesting engine module.
+
+Copyright (c) 2025 L.Bassetti
+"""
 
 from .engine import Backtester, quick_backtest
 from .rebalancing import (

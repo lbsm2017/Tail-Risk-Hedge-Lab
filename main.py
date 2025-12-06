@@ -1,5 +1,8 @@
 """
-Main entry point for the Tail-Risk Hedging Backtester.
+Tail-Risk Hedging Backtester - Main Entry Point
+
+Copyright (c) 2025 L.Bassetti
+Main entry point for running the complete tail-risk hedging analysis pipeline.
 
 Usage:
     python main.py

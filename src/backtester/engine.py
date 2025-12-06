@@ -1,6 +1,7 @@
 """
 Backtesting Engine Module
 
+Copyright (c) 2025 L.Bassetti
 Main orchestration for backtesting hedge strategies.
 Optimized with parallel processing for performance.
 """

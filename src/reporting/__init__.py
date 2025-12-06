@@ -1,4 +1,8 @@
-"""Reporting and visualization module."""
+"""
+Reporting and visualization module.
+
+Copyright (c) 2025 L.Bassetti
+"""
 
 from .report import (
     generate_html_report,

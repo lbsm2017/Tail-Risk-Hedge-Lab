@@ -1,4 +1,8 @@
-"""Tail-risk metrics and correlation analysis module."""
+"""
+Tail-risk metrics and correlation analysis module.
+
+Copyright (c) 2025 L.Bassetti
+"""
 
 from .tail_risk import (
     cvar,
