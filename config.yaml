@@ -1,0 +1,63 @@
+data:
+  start_date: "2008-04-01"  # ACWI inception
+  end_date: null            # Latest available
+  frequency: "D"            # Daily
+  cache_path: "data/prices.parquet"
+  import_folder: "data/import"  # Folder for custom Excel data files
+  use_full_history: true    # Use all available data per asset (true) or common period only (false)
+
+assets:
+  base: "ACWI"
+  base_min_weight_individual: 0.50  # Min ACWI weight for single-asset tests
+  base_min_weight_multi: 0.33       # Min ACWI weight for multi-asset portfolios
+  hedges:
+    - ticker: "TLT"
+      name: "Long Treasury (20+ Year)"
+      min_weight: 0.00
+      max_weight: 0.50
+    - ticker: "IEF"
+      name: "Intermediate Treasury (7-10 Year)"
+      min_weight: 0.00
+      max_weight: 0.50
+    - ticker: "GLD"
+      name: "Gold"
+      min_weight: 0.00
+      max_weight: 0.40
+    - ticker: "SLV"
+      name: "Silver"
+      min_weight: 0.00
+      max_weight: 0.25
+    - ticker: "BTC-USD"
+      name: "Bitcoin"
+      min_weight: 0.00
+      max_weight: 0.15
+    - ticker: "ETH-USD"
+      name: "Ethereum"
+      min_weight: 0.00
+      max_weight: 0.10
+    - ticker: "DBMF"
+      name: "Managed Futures (Trend Following)"
+      min_weight: 0.00
+      max_weight: 0.30
+
+regime:
+  method: "ensemble"  # or 'drawdown', 'vix', 'markov', 'volatility'
+  drawdown_threshold: -0.10
+  vix_crisis_threshold: 30
+  volatility_percentile: 80
+  volatility_window: 63
+
+metrics:
+  cvar_confidence: 0.95
+  mar: 0.0  # Minimum acceptable return
+
+optimization:
+  # Target risk reductions (output targets, not input)
+  targets: [0.10, 0.25, 0.50]  # Find weights to achieve 10%, 25%, 50% reduction
+  weight_step: 0.01
+  tolerance: 0.02  # Accept solution within 2% of target
+  max_total_hedge_weight: 0.67  # Max combined hedge allocation (1 - base_min_weight_multi)
+
+hypothesis:
+  alpha: 0.05
+  n_bootstrap: 5000
