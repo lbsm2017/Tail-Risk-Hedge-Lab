@@ -61,3 +61,7 @@ optimization:
 hypothesis:
   alpha: 0.05
   n_bootstrap: 5000
+
+rebalancing:
+  frequency: "quarterly"  # Options: daily, weekly, monthly, quarterly, annual
+  method: "calendar"      # calendar = rebalance at end of period

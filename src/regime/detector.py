@@ -6,7 +6,7 @@ Implements multiple methods to identify crisis vs normal market regimes.
 
 import numpy as np
 import pandas as pd
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List, Dict
 from scipy import stats
 
 
@@ -375,3 +375,86 @@ def align_regime_with_returns(
     aligned = aligned.fillna(0).astype(int)
     
     return aligned
+
+
+# Named historical crisis periods (approximate peak-to-trough dates)
+NAMED_CRISES = {
+    'Global Financial Crisis': ('2008-09-15', '2009-03-09'),
+    'European Debt Crisis': ('2011-07-01', '2011-10-04'),
+    'China/Oil Shock': ('2015-08-18', '2016-02-11'),
+    'COVID-19 Crash': ('2020-02-19', '2020-03-23'),
+    '2022 Bear Market': ('2022-01-03', '2022-10-12'),
+}
+
+
+def get_named_crisis_periods(
+    regime_labels: pd.Series,
+    base_returns: Optional[pd.Series] = None,
+    min_duration: int = 10
+) -> List[Dict]:
+    """
+    Identify and name major crisis episodes from regime labels.
+    
+    Matches detected crisis periods against known historical crises.
+    Unnamed periods are labeled as "Crisis N".
+    
+    Args:
+        regime_labels: Binary regime series (0=Normal, 1=Crisis)
+        base_returns: Optional returns series for severity calculation
+        min_duration: Minimum days for a crisis to be included
+        
+    Returns:
+        List of crisis dictionaries with keys:
+        - name: Crisis name (e.g., 'Global Financial Crisis' or 'Crisis 1')
+        - start: Start date (Timestamp)
+        - end: End date (Timestamp)
+        - duration_days: Number of trading days
+        - severity: Cumulative return during crisis (if base_returns provided)
+    """
+    # Get crisis episodes from regime
+    episodes = identify_crisis_dates(regime_labels, min_duration=min_duration)
+    
+    if not episodes:
+        return []
+    
+    result = []
+    unnamed_counter = 1
+    
+    for start, end, duration in episodes:
+        # Try to match with named crises
+        crisis_name = None
+        
+        for name, (known_start, known_end) in NAMED_CRISES.items():
+            known_start_ts = pd.Timestamp(known_start)
+            known_end_ts = pd.Timestamp(known_end)
+            
+            # Check if this episode overlaps with a known crisis
+            # Allow some flexibility (within 30 days of known dates)
+            if (start <= known_end_ts + pd.Timedelta(days=30) and
+                end >= known_start_ts - pd.Timedelta(days=30)):
+                crisis_name = name
+                break
+        
+        if crisis_name is None:
+            crisis_name = f"Crisis {unnamed_counter}"
+            unnamed_counter += 1
+        
+        # Calculate severity if returns provided
+        severity = None
+        if base_returns is not None:
+            crisis_returns = base_returns.loc[start:end]
+            if len(crisis_returns) > 0:
+                severity = (1 + crisis_returns).prod() - 1  # Cumulative return
+        
+        result.append({
+            'name': crisis_name,
+            'start': start,
+            'end': end,
+            'duration_days': duration,
+            'severity': severity
+        })
+    
+    # Sort by start date
+    result.sort(key=lambda x: x['start'])
+    
+    return result

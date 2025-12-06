@@ -26,6 +26,28 @@ import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 
 
+def calculate_drawdown_series(prices: pd.Series) -> pd.Series:
+    """
+    Convert price/value series to drawdown series.
+    
+    Args:
+        prices: Cumulative price/value series (starting around 1.0)
+        
+    Returns:
+        Drawdown series (-1 to 0 range, where -1 = -100%)
+    """
+    if prices is None or len(prices) == 0:
+        return pd.Series(dtype='float64')
+    
+    # Handle both Series and array input
+    if isinstance(prices, np.ndarray):
+        prices = pd.Series(prices)
+    
+    rolling_max = prices.expanding().max()
+    drawdown = (prices - rolling_max) / rolling_max
+    return drawdown
+
+
 def format_pct(value: float, decimals: int = 2, show_sign: bool = False) -> str:
     """Format as percentage."""
     if pd.isna(value):
@@ -162,6 +184,140 @@ def create_rolling_correlation_chart(
     from matplotlib.patches import Patch
     legend_elements = [Patch(facecolor='#ffcccc', alpha=0.5, label='Crisis Periods')]
     ax.legend(handles=legend_elements, loc='lower left', fontsize=8, framealpha=0.9)
+    
+    plt.tight_layout()
+    
+    # Convert to base64
+    buffer = BytesIO()
+    plt.savefig(buffer, format='png', bbox_inches='tight', facecolor='white', edgecolor='none')
+    buffer.seek(0)
+    image_base64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
+    plt.close(fig)
+    
+    return image_base64
+
+
+def create_crisis_performance_chart(
+    crisis_periods: List[Dict],
+    returns: pd.DataFrame,
+    base_asset: str = 'ACWI'
+) -> str:
+    """
+    Create grouped bar chart showing asset performance during each crisis period.
+    
+    Args:
+        crisis_periods: List of crisis dicts with 'name', 'start', 'end' keys
+        returns: DataFrame with asset returns (columns = tickers)
+        base_asset: Name of the base asset column
+        
+    Returns:
+        Base64 encoded PNG image string for embedding in HTML
+    """
+    if not crisis_periods:
+        return ""
+    
+    # Calculate cumulative returns during each crisis for each asset
+    crisis_names = []
+    crisis_returns = {}
+    
+    # Get list of assets to plot
+    assets = [base_asset] + [col for col in returns.columns if col != base_asset and col != '^VIX']
+    
+    # Limit to key assets for readability
+    key_assets = [base_asset, 'TLT', 'GLD', 'BTC-USD', 'DBMF']
+    assets = [a for a in key_assets if a in returns.columns]
+    
+    for crisis in crisis_periods:
+        name = crisis['name']
+        start = crisis['start']
+        end = crisis['end']
+        
+        # Add date range to name for clarity
+        start_str = start.strftime('%b %Y') if hasattr(start, 'strftime') else str(start)[:7]
+        crisis_names.append(f"{name}\n({start_str})")
+        
+        # Calculate cumulative return for each asset during this crisis
+        for asset in assets:
+            if asset not in returns.columns:
+                continue
+            
+            asset_returns = returns[asset].loc[start:end].dropna()
+            if len(asset_returns) > 0:
+                cum_return = (1 + asset_returns).prod() - 1
+            else:
+                cum_return = 0.0
+            
+            if asset not in crisis_returns:
+                crisis_returns[asset] = []
+            crisis_returns[asset].append(cum_return * 100)  # Convert to percentage
+    
+    if not crisis_returns:
+        return ""
+    
+    # Create figure
+    n_crises = len(crisis_names)
+    n_assets = len(crisis_returns)
+    
+    fig, ax = plt.subplots(figsize=(max(10, n_crises * 1.5), 6), dpi=100)
+    ax.set_facecolor('#fafafa')
+    fig.patch.set_facecolor('white')
+    
+    # Bar positions
+    x = np.arange(n_crises)
+    bar_width = 0.8 / n_assets
+    
+    # Color scheme
+    color_map = {
+        'ACWI': '#c0392b',      # Red for baseline
+        'TLT': '#2980b9',       # Blue for treasuries
+        'IEF': '#3498db',
+        'GLD': '#f39c12',       # Gold color
+        'SLV': '#95a5a6',       # Silver color
+        'BTC-USD': '#f7931a',   # Bitcoin orange
+        'ETH-USD': '#627eea',   # Ethereum purple
+        'DBMF': '#1abc9c',      # Teal for managed futures
+    }
+    
+    # Plot bars for each asset
+    for i, (asset, rets) in enumerate(crisis_returns.items()):
+        offset = (i - n_assets / 2 + 0.5) * bar_width
+        color = color_map.get(asset, '#888888')
+        
+        bars = ax.bar(x + offset, rets, bar_width * 0.9, 
+                     label=asset, color=color, edgecolor='white', linewidth=0.5)
+        
+        # Add value labels on bars
+        for bar, ret in zip(bars, rets):
+            height = bar.get_height()
+            va = 'bottom' if height >= 0 else 'top'
+            offset_y = 0.5 if height >= 0 else -0.5
+            ax.annotate(f'{ret:.0f}%',
+                       xy=(bar.get_x() + bar.get_width() / 2, height),
+                       xytext=(0, offset_y),
+                       textcoords="offset points",
+                       ha='center', va=va, fontsize=7, color='#333333')
+    
+    # Zero line
+    ax.axhline(y=0, color='#333333', linestyle='-', linewidth=1)
+    
+    # Formatting
+    ax.set_ylabel('Cumulative Return (%)', fontsize=10)
+    ax.set_title('Asset Performance During Crisis Periods', 
+                 fontsize=12, fontweight='bold', color='#1a1a2e', pad=10)
+    ax.set_xticks(x)
+    ax.set_xticklabels(crisis_names, fontsize=9)
+    
+    # Grid
+    ax.grid(True, axis='y', alpha=0.3, linestyle='-', linewidth=0.5)
+    
+    # Spines
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.spines['left'].set_color('#cccccc')
+    ax.spines['bottom'].set_color('#cccccc')
+    
+    # Legend
+    ax.legend(loc='upper right', fontsize=8, framealpha=0.9, ncol=min(n_assets, 4))
     
     plt.tight_layout()
     
@@ -804,7 +960,9 @@ def generate_html_report(
     
     html += """
         </section>
-        
+"""
+    
+    html += """
         <footer>
             <div>Tail-Risk Hedge Analysis Framework</div>
             <div class="disclaimer">

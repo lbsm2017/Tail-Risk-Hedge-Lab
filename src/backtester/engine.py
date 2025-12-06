@@ -32,6 +32,12 @@ from ..optimization.multi_asset import (
     portfolio_analytics
 )
 from ..hypothesis.tests import comprehensive_hypothesis_tests
+from .rebalancing import (
+    simulate_rebalanced_portfolio,
+    get_rebalancing_summary,
+    get_asset_inception_dates,
+    get_portfolio_data_window
+)
 
 
 # Module-level function for parallel processing (can't pickle instance methods)
@@ -478,11 +484,55 @@ class Backtester:
         normal_periods = self.regime_labels == 0
         crisis_periods = self.regime_labels == 1
         
-        # Construct portfolio returns
+        # Construct portfolio with rebalancing
         total_weight = sum(weights.values())
-        portfolio_returns = (1 - total_weight) * base_returns
-        for ticker, w in weights.items():
-            portfolio_returns += w * self.returns[ticker]
+        
+        # Build full weights dict including base asset
+        full_weights = {base_asset: 1 - total_weight}
+        full_weights.update(weights)
+        
+        # Get rebalancing frequency from config
+        rebalance_freq = self.config.get('rebalancing', {}).get('frequency', 'quarterly')
+        
+        # Simulate rebalanced portfolio
+        rebalanced_sim = simulate_rebalanced_portfolio(
+            returns=self.returns,
+            weights=full_weights,
+            rebalance_frequency=rebalance_freq
+        )
+        
+        # Use rebalanced portfolio returns for performance metrics
+        portfolio_returns = rebalanced_sim['portfolio_return']
+        portfolio_values = rebalanced_sim['portfolio_value']
+        
+        # Add rebalancing summary to analytics
+        rebal_summary = get_rebalancing_summary(rebalanced_sim)
+        analytics['rebalancing'] = {
+            'frequency': rebalance_freq,
+            'n_rebalances': rebal_summary['n_rebalances'],
+            'avg_drift': rebal_summary['avg_drift_at_rebalance'],
+            'max_drift': rebal_summary['max_drift_at_rebalance']
+        }
+        
+        # Store portfolio values for drawdown chart
+        analytics['portfolio_values'] = portfolio_values
+        analytics['portfolio_returns'] = portfolio_returns
+        
+        # Get portfolio data window metadata for accurate plotting
+        try:
+            portfolio_start, portfolio_end, asset_inceptions = get_portfolio_data_window(
+                self.returns,
+                full_weights
+            )
+            analytics['portfolio_metadata'] = {
+                'portfolio_start_date': portfolio_start,
+                'portfolio_end_date': portfolio_end,
+                'asset_inception_dates': asset_inceptions,
+                'earliest_all_data_date': self.returns.index[0],
+                'latest_all_data_date': self.returns.index[-1]
+            }
+        except Exception as e:
+            analytics['portfolio_metadata'] = {}
         
         # Performance by regime
         if crisis_periods.sum() > 0:
@@ -587,6 +637,11 @@ class Backtester:
         print(f"Total backtest time: {total_elapsed:.2f}s")
         print(f"{'=' * 60}")
         
+        # Calculate baseline (100% ACWI) cumulative values for drawdown comparison
+        base_asset = self.config['assets']['base']
+        baseline_returns = self.returns[base_asset].dropna()
+        baseline_values = (1 + baseline_returns).cumprod()
+        
         results = {
             'config': self.config,
             'hedge_names': self.hedge_names,
@@ -600,7 +655,8 @@ class Backtester:
             'individual_hedges': individual_results,
             'portfolios': portfolios,
             'returns': self.returns,
-            'regime_labels': self.regime_labels
+            'regime_labels': self.regime_labels,
+            'baseline_values': baseline_values
         }
         
         return results
