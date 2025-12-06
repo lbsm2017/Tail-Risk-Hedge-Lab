@@ -1,95 +1,113 @@
-Tail-Risk Hedge Lab
+# License
+
+**Tail-Risk Hedge Lab**  
 Copyright (c) 2025 Lorenzo Bassetti
 
-This project is distributed under a Dual License Model:
-1. Creative Commons Attribution–NonCommercial 4.0 International (CC BY-NC 4.0)
-2. A separate Commercial License available upon request
+---
 
-=====================================================================
-1. NON-COMMERCIAL LICENSE (DEFAULT)
-   Creative Commons Attribution–NonCommercial 4.0 International
-   (CC BY-NC 4.0)
-=====================================================================
+## Dual License Model
 
-You are permitted to:
-- Use this work for academic research, coursework, scientific studies,
-  personal experimentation, and non-commercial open research.
-- Modify, adapt, and build upon the framework for non-commercial purposes.
-- Share derivatives under the same Non-Commercial terms.
+This project is distributed under a **Dual License Model**:
 
-Under the following conditions:
-- **Attribution**: You must give appropriate credit and indicate if changes
-  were made.
-- **Non-Commercial Use Only**: Commercial use is strictly prohibited unless
-  you obtain a separate commercial license.
-- **No Warranty**: The work is provided “as is” without any warranty.
+1. **Creative Commons Attribution-NonCommercial 4.0 International** (CC BY-NC 4.0) — for non-commercial use
+2. **Commercial License** — available upon request for commercial use
 
-Full license text:
-https://creativecommons.org/licenses/by-nc/4.0/legalcode
+---
 
-Human-readable summary:
-https://creativecommons.org/licenses/by-nc/4.0/
+## 1. Non-Commercial License (Default)
 
-=====================================================================
-Definition of “Commercial Use”
-=====================================================================
+### Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0)
 
-For the purposes of this framework, “Commercial Use” includes, but is not
-limited to:
+#### You Are Permitted To:
 
-- Use within banks, investment managers, hedge funds, insurers, brokers,
-  asset managers, proprietary trading firms, or other for-profit entities.
-- Use in production systems, quantitative research pipelines, risk engines,
-  trading models, or portfolio construction tools within commercial
-  organizations.
-- Use in paid products, commercial software, SaaS platforms, consulting work,
-  advisory services, workshops, or any revenue-generating context.
-- Use inside internal business operations of a for-profit entity, even if the
-  software is not redistributed externally.
+- ✅ Use this work for **academic research**, coursework, scientific studies, personal experimentation, and non-commercial open research
+- ✅ **Modify, adapt, and build upon** the framework for non-commercial purposes
+- ✅ **Share derivatives** under the same Non-Commercial terms
 
-If there is any uncertainty, usage is assumed to be commercial unless written
-permission is granted by the copyright holder.
+#### Under the Following Conditions:
 
-=====================================================================
-2. COMMERCIAL LICENSE OPTION
-=====================================================================
+- **Attribution**: You must give appropriate credit to the original author and indicate if changes were made
+- **Non-Commercial Use Only**: Commercial use is strictly prohibited unless you obtain a separate commercial license
+- **No Warranty**: The work is provided "as is" without any warranty
 
-Organizations wishing to use Tail-Risk Hedge Lab in any commercial,
-institutional, or revenue-generating capacity must obtain a commercial
-license.
+#### License Resources:
 
-Commercial licensing may include:
-- Internal enterprise use
-- Integration into proprietary risk or quant systems
-- Permission for commercial research, analysis, or operational use
-- Redistribution or embedding in commercial products
-- Support, customization, or assurances unavailable under CC BY-NC
+- **Full Legal Text**: [CC BY-NC 4.0 Legal Code](https://creativecommons.org/licenses/by-nc/4.0/legalcode)
+- **Human-Readable Summary**: [CC BY-NC 4.0 Summary](https://creativecommons.org/licenses/by-nc/4.0/)
 
-To request a commercial license, contact:
-**lorenzo.bassetti@gmail.com**
+---
 
-Use for commercial purposes without explicit written permission is a violation
-of this license.
+## Definition of "Commercial Use"
 
-=====================================================================
-3. DISCLAIMER OF WARRANTY AND LIABILITY
-=====================================================================
+For the purposes of this framework, **"Commercial Use"** includes, but is not limited to:
 
-This software and its components are provided “as is”, without warranty of any
-kind, express or implied, including but not limited to merchantability,
-fitness for a particular purpose, performance, or non-infringement.
+### Financial Institutions & For-Profit Entities
+- Use within banks, investment managers, hedge funds, insurers, brokers, asset managers, proprietary trading firms, or other for-profit entities
 
-In no event shall the author be liable for any claim, damages, or liability,
-whether in an action of contract, tort, or otherwise, arising from the use of
-this software.
+### Production Systems & Business Operations
+- Use in production systems, quantitative research pipelines, risk engines, trading models, or portfolio construction tools within commercial organizations
+- Use inside internal business operations of a for-profit entity, even if the software is not redistributed externally
 
-=====================================================================
-4. SUMMARY
-=====================================================================
+### Revenue-Generating Activities
+- Use in paid products, commercial software, SaaS platforms, consulting work, advisory services, or workshops
+- Any other revenue-generating context
 
-- If you are using this project for academic, personal, or non-commercial
-  research: you are covered under **CC BY-NC 4.0**.
-- If you are using this project in a commercial or institutional environment:
-  you must obtain a **commercial license**.
-- Commercial use without written permission is strictly prohibited.
+### Uncertainty Clause
+If there is any uncertainty about whether your use case qualifies as commercial, **usage is assumed to be commercial** unless written permission is granted by the copyright holder.
 
+---
+
+## 2. Commercial License Option
+
+Organizations wishing to use **Tail-Risk Hedge Lab** in any commercial, institutional, or revenue-generating capacity must obtain a **commercial license**.
+
+### Commercial License Benefits May Include:
+
+- ✅ Internal enterprise use authorization
+- ✅ Integration into proprietary risk or quantitative systems
+- ✅ Permission for commercial research, analysis, or operational use
+- ✅ Redistribution or embedding in commercial products
+- ✅ Support, customization, and assurances unavailable under CC BY-NC
+
+### How to Request a Commercial License:
+
+📧 **Contact**: lorenzo.bassetti@gmail.com
+
+> ⚠️ **Important**: Use for commercial purposes without explicit written permission is a violation of this license.
+
+---
+
+## 3. Disclaimer of Warranty and Liability
+
+This software and its components are provided **"AS IS"**, without warranty of any kind, express or implied, including but not limited to:
+
+- Merchantability
+- Fitness for a particular purpose
+- Performance
+- Non-infringement
+
+**In no event shall the author be liable** for any claim, damages, or other liability, whether in an action of contract, tort, or otherwise, arising from, out of, or in connection with the software or the use or other dealings in the software.
+
+---
+
+## 4. Summary
+
+| Use Case | License Required |
+|----------|------------------|
+| 🎓 Academic research, personal projects, non-commercial open research | **CC BY-NC 4.0** (Free) |
+| 🏢 Commercial or institutional environment | **Commercial License** (Contact required) |
+
+### Key Points:
+
+- ✅ **Non-commercial use**: You are covered under CC BY-NC 4.0
+- ⛔ **Commercial use**: You must obtain a commercial license
+- ⚠️ **Commercial use without written permission is strictly prohibited**
+
+---
+
+## Questions?
+
+If you have any questions about licensing or need clarification on whether your use case requires a commercial license, please contact:
+
+**Lorenzo Bassetti**  
+📧 lorenzo.bassetti@gmail.com

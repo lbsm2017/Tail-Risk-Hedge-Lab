@@ -286,7 +286,7 @@ We welcome contributions from the research community! This is an open-source pro
 - **Commercial Use**: Requires a separate commercial license.  
   Contact: lorenzo.bassetti@gmail.com
 
-See `License.md` for full details.
+See **[License.md](License.md)** for full details.
 
 ---
 
@@ -345,15 +345,3 @@ Special thanks to the open-source quantitative finance community.
 
 **⭐ Star this repository if you find it useful!**  
 **🐛 Report issues and contribute to make it better!**
-
-## Documentation
-
-See `docs/` folder for comprehensive documentation:
-- `documentation.md`: Complete methodology
-- `plan.md`: Implementation plan
-- `tail_risk_hedging.md`: Scientific backdrop
-- Additional methodology documents
-
-## License
-
-For research purposes.
