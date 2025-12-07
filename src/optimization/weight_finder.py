@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 from typing import Tuple, Optional, Dict, List
 from concurrent.futures import ThreadPoolExecutor
-from ..metrics.tail_risk import cvar, max_drawdown
+from ..metrics.tail_risk import cvar, max_drawdown, cagr
 
 
 def compute_portfolio_risk(
@@ -65,6 +65,7 @@ def find_weight_for_target_reduction(
     weight_step: float = 0.01,
     alpha: float = 0.95,
     tolerance: float = 0.02,
+    tie_break_tolerance: float = 0.001,
     **kwargs
 ) -> Dict:
     """
@@ -83,6 +84,7 @@ def find_weight_for_target_reduction(
         weight_step: Weight precision
         alpha: CVaR confidence level
         tolerance: Acceptable deviation from target
+        tie_break_tolerance: Risk difference threshold for CAGR tie-breaking
         
     Returns:
         Dict with optimal_weight, achieved_reduction, baseline, hedged, feasible
@@ -122,8 +124,10 @@ def find_weight_for_target_reduction(
     best_risk = baseline
     best_reduction = 0.0
     
-    # First pass: find weight that gets closest to target reduction
-    # while actually reducing risk
+    # First pass: find all weights that meet or exceed target reduction
+    # Goal: Find MINIMUM weight that achieves the target
+    viable_candidates = []
+    
     for w in weights:
         risk = compute_portfolio_risk(base_aligned, hedge_aligned, w, metric, alpha,
                                      base_resampled, hedge_resampled, cvar_frequency)
@@ -132,21 +136,65 @@ def find_weight_for_target_reduction(
         if risk < baseline:
             reduction = (baseline - risk) / baseline
             
-            # Check if this achieves target (or gets closer)
+            # Check if this meets or exceeds target reduction
             if reduction >= target_reduction - tolerance:
-                # Found a valid solution
-                if best_reduction < target_reduction or reduction < best_reduction:
-                    # Either first valid solution or closer to target
-                    best_weight = w
-                    best_risk = risk
-                    best_reduction = reduction
-                    if abs(reduction - target_reduction) <= tolerance:
-                        break  # Close enough to target
-            elif reduction > best_reduction:
-                # Better than current best, even if not at target
-                best_weight = w
-                best_risk = risk
-                best_reduction = reduction
+                viable_candidates.append({
+                    'weight': w,
+                    'risk': risk,
+                    'reduction': reduction
+                })
+    
+    # Second pass: among viable candidates, select MINIMUM weight
+    if viable_candidates:
+        # Find the minimum weight among candidates that achieve target
+        min_weight_value = min(c['weight'] for c in viable_candidates)
+        min_weight_candidates = [c for c in viable_candidates if c['weight'] == min_weight_value]
+        
+        # Third pass: if multiple minimum weights exist, use CAGR tie-breaking
+        if len(min_weight_candidates) > 1:
+            best_cagr = -np.inf
+            best_candidate = None
+            
+            for candidate in min_weight_candidates:
+                w = candidate['weight']
+                # Construct portfolio returns
+                portfolio_returns = (1 - w) * base_aligned + w * hedge_aligned
+                portfolio_cagr = cagr(portfolio_returns.values, periods_per_year=252)
+                
+                if portfolio_cagr > best_cagr:
+                    best_cagr = portfolio_cagr
+                    best_candidate = candidate
+            
+            if best_candidate is not None:
+                best_weight = best_candidate['weight']
+                best_risk = best_candidate['risk']
+                best_reduction = best_candidate['reduction']
+        else:
+            # Only one minimum weight candidate
+            best_weight = min_weight_candidates[0]['weight']
+            best_risk = min_weight_candidates[0]['risk']
+            best_reduction = min_weight_candidates[0]['reduction']
+    else:
+        # No viable candidates found - target is not achievable
+        # Return the best effort (maximum achievable reduction)
+        all_results = []
+        for w in weights:
+            risk = compute_portfolio_risk(base_aligned, hedge_aligned, w, metric, alpha,
+                                         base_resampled, hedge_resampled, cvar_frequency)
+            if risk < baseline:
+                reduction = (baseline - risk) / baseline
+                all_results.append({
+                    'weight': w,
+                    'risk': risk,
+                    'reduction': reduction
+                })
+        
+        if all_results:
+            # Find maximum achievable reduction at max weight
+            max_reduction_result = max(all_results, key=lambda x: x['reduction'])
+            best_weight = max_reduction_result['weight']
+            best_risk = max_reduction_result['risk']
+            best_reduction = max_reduction_result['reduction']
     
     # Determine feasibility
     feasible = best_reduction >= target_reduction - tolerance
