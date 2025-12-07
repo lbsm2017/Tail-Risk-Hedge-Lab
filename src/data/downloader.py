@@ -28,27 +28,16 @@ class DataDownloader:
     Downloads and manages financial data from Yahoo Finance.
     
     Attributes:
-        TICKERS (dict): Predefined ticker groups for different asset classes
         prices (pd.DataFrame): Downloaded price data
         returns (pd.DataFrame): Computed returns
     """
-    
-    TICKERS = {
-        'base': ['ACWI'],
-        'bonds': ['TLT', 'IEF', 'SHY'],
-        'gold': ['GLD'],
-        'silver': ['SLV'],
-        'crypto': ['BTC-USD', 'ETH-USD'],
-        'cta': ['DBMF'],
-        'vix': ['^VIX']
-    }
     
     def __init__(self, config: dict):
         """
         Initialize DataDownloader.
         
         Args:
-            config: Configuration dict with keys: start_date, end_date, cache_path
+            config: Configuration dict with keys: start_date, end_date, cache_path, plus parent config with assets
         """
         self.config = config
         self.start_date = config.get('start_date', '2008-04-01')
@@ -59,20 +48,26 @@ class DataDownloader:
         # Track actual asset inception dates (before any filling/merging)
         self.asset_inception_dates = {}
         
-    def download_all(self, progress: bool = True) -> pd.DataFrame:
+        # Build ticker list from config (passed via parent during initialization)
+        # This will be set by _build_ticker_list() after full config is available
+        self.tickers = []
+        
+    def download_all(self, progress: bool = True, full_config: dict = None) -> pd.DataFrame:
         """
         Download all tickers from Yahoo Finance.
         
         Args:
             progress: Show progress bar
+            full_config: Full configuration dict (if not already set) to extract ticker list
             
         Returns:
             DataFrame with adjusted close prices for all tickers
         """
-        # Flatten all tickers into a single list
-        all_tickers = []
-        for category, tickers in self.TICKERS.items():
-            all_tickers.extend(tickers)
+        # Build ticker list from config if not already done
+        if not self.tickers and full_config:
+            self._build_ticker_list(full_config)
+        
+        all_tickers = self.tickers
         
         print(f"Downloading data for {len(all_tickers)} tickers from {self.start_date} to {self.end_date}...")
         
@@ -124,6 +119,32 @@ class DataDownloader:
         print(f"Downloaded {len(prices)} days of data for {len(prices.columns)} assets")
         
         return self.prices
+    
+    def _build_ticker_list(self, full_config: dict) -> None:
+        """
+        Build ticker list from config.yaml.
+        
+        Args:
+            full_config: Full configuration dict with 'assets' key
+        """
+        tickers = []
+        
+        # Add base asset
+        base_ticker = full_config.get('assets', {}).get('base', 'ACWI')
+        tickers.append(base_ticker)
+        
+        # Add hedge assets
+        hedges = full_config.get('assets', {}).get('hedges', [])
+        for hedge in hedges:
+            ticker = hedge.get('ticker')
+            if ticker:
+                tickers.append(ticker)
+        
+        # Add VIX for regime detection
+        tickers.append('^VIX')
+        
+        self.tickers = tickers
+        print(f"Built ticker list from config: {', '.join(tickers)}")
     
     def align_and_clean(self) -> pd.DataFrame:
         """

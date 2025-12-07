@@ -21,15 +21,31 @@ def test_downloader():
     print("Testing Data Downloader")
     print("=" * 70)
     
-    # Initialize downloader
-    downloader = DataDownloader(start_date='2020-01-01', end_date='2024-12-31')
+    # Initialize downloader with config dict
+    config = {
+        'start_date': '2020-01-01',
+        'end_date': '2024-12-31',
+        'cache_path': 'data/test_prices.parquet'
+    }
+    full_config = {
+        'data': config,
+        'assets': {
+            'base': 'ACWI',
+            'hedges': [
+                {'ticker': 'TLT', 'name': 'Long Treasury', 'min_weight': 0.0, 'max_weight': 0.5},
+                {'ticker': 'IEF', 'name': 'Intermediate Treasury', 'min_weight': 0.0, 'max_weight': 0.5},
+                {'ticker': 'GLD', 'name': 'Gold', 'min_weight': 0.0, 'max_weight': 0.4}
+            ]
+        }
+    }
+    downloader = DataDownloader(config)
     print(f"\n✓ DataDownloader initialized")
     print(f"  Start: {downloader.start_date}")
     print(f"  End: {downloader.end_date}")
     
     # Download data
     print("\n1. Downloading data...")
-    prices = downloader.download_all(progress=False)
+    prices = downloader.download_all(progress=False, full_config=full_config)
     print(f"✓ Downloaded {prices.shape[0]} days × {prices.shape[1]} assets")
     
     # Clean data

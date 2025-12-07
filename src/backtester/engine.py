@@ -205,7 +205,7 @@ class Backtester:
                 use_cache = False
         
         if not use_cache:
-            self.downloader.download_all()
+            self.downloader.download_all(full_config=self.config)
             self.prices = self.downloader.align_and_clean()
             self.returns = self.downloader.compute_returns(freq='D')
             self.downloader.cache_to_disk()
