@@ -120,11 +120,14 @@ class TestBuildOptimalPortfolio(unittest.TestCase):
             mock_opt.return_value = {'TLT': 0.15, 'GLD': 0.0}
             
             with patch('src.backtester.engine.simulate_rebalanced_portfolio') as mock_sim:
-                mock_sim.return_value = {
+                # Return DataFrame matching expected structure
+                sim_df = pd.DataFrame({
                     'portfolio_return': self.returns['ACWI'] * 0.85 + self.returns['TLT'] * 0.15,
-                    'portfolio_value': pd.Series(1.0, index=self.returns.index),
-                    'rebalance_dates': []
-                }
+                    'portfolio_value': 1.0,
+                    'rebalance_flag': 0,
+                    'drift': 0.0
+                }, index=self.returns.index)
+                mock_sim.return_value = sim_df
                 
                 result = bt.build_optimal_portfolio(target_cvar_reduction=0.1)
                 
@@ -171,11 +174,13 @@ class TestBuildOptimalPortfolio(unittest.TestCase):
                 def capture_returns(returns, weights, rebalance_frequency):
                     # The returns should start from late_start (GLD inception)
                     self.assertGreaterEqual(returns.index[0], late_start)
-                    return {
+                    # Return DataFrame matching expected structure
+                    return pd.DataFrame({
                         'portfolio_return': returns.iloc[:, 0] * 0.85,
-                        'portfolio_value': pd.Series(1.0, index=returns.index),
-                        'rebalance_dates': []
-                    }
+                        'portfolio_value': 1.0,
+                        'rebalance_flag': 0,
+                        'drift': 0.0
+                    }, index=returns.index)
                 
                 mock_sim.side_effect = capture_returns
                 
@@ -281,11 +286,14 @@ class TestPortfolioMetadata(unittest.TestCase):
             mock_opt.return_value = {'TLT': 0.15}
             
             with patch('src.backtester.engine.simulate_rebalanced_portfolio') as mock_sim:
-                mock_sim.return_value = {
+                # Return DataFrame matching expected structure
+                sim_df = pd.DataFrame({
                     'portfolio_return': bt.returns['ACWI'],
-                    'portfolio_value': pd.Series(1.0, index=bt.returns.index),
-                    'rebalance_dates': []
-                }
+                    'portfolio_value': 1.0,
+                    'rebalance_flag': 0,
+                    'drift': 0.0
+                }, index=bt.returns.index)
+                mock_sim.return_value = sim_df
                 
                 result = bt.build_optimal_portfolio(target_cvar_reduction=0.1)
                 
