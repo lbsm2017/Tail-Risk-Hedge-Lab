@@ -1,7 +1,7 @@
 """
 Tail-Risk Metrics Module
 
-Copyright (c) 2025 L.Bassetti
+Author: L.Bassetti
 Implements various tail-risk measures including CVaR, Maximum Drawdown,
 Downside Deviation, and other risk-adjusted performance metrics.
 """

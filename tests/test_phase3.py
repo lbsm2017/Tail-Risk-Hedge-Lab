@@ -1,7 +1,7 @@
 """
 Test script for Phase 3 modules: Hypothesis Testing, Backtester, and Reporting.
 
-Copyright (c) 2025 L.Bassetti
+Author: L.Bassetti
 Run this to validate the complete framework implementation.
 """
 

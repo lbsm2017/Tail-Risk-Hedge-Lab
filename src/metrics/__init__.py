@@ -1,7 +1,7 @@
 """
 Tail-risk metrics and correlation analysis module.
 
-Copyright (c) 2025 L.Bassetti
+Author: L.Bassetti
 """
 
 from .tail_risk import (

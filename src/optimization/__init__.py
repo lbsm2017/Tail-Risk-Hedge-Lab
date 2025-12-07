@@ -1,7 +1,7 @@
 """
 Portfolio optimization and weight finding module.
 
-Copyright (c) 2025 L.Bassetti
+Author: L.Bassetti
 """
 
 from .weight_finder import (

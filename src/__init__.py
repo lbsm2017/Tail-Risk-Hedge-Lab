@@ -1,7 +1,7 @@
 """
 Tail-Risk Hedging Backtesting Framework
 
-Copyright (c) 2025 L.Bassetti
+Author: L.Bassetti
 A comprehensive framework for testing tail-risk protection strategies
 against a 100% global equity portfolio baseline.
 """

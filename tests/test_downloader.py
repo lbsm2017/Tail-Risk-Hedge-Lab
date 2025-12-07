@@ -1,7 +1,7 @@
 """
 Test script for Data Downloader module
 
-Copyright (c) 2025 L.Bassetti
+Author: L.Bassetti
 """
 
 import sys

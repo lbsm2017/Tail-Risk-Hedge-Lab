@@ -1,7 +1,7 @@
 """
 Data acquisition and processing module.
 
-Copyright (c) 2025 L.Bassetti
+Author: L.Bassetti
 """
 
 from .downloader import DataDownloader

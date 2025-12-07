@@ -1,7 +1,7 @@
 """
 Tail-Risk Hedging Backtester - Main Entry Point
 
-Copyright (c) 2025 L.Bassetti
+Author: L.Bassetti
 Main entry point for running the complete tail-risk hedging analysis pipeline.
 
 Usage:
