@@ -46,20 +46,87 @@ def _analyze_hedge_worker(args: Tuple) -> Tuple[str, Dict]:
     """
     Worker function to analyze a single hedge asset.
     Designed to be called in parallel.
-    Uses all available overlapping data between base and hedge.
+    
+    CRITICAL: Uses only the overlapping time window where BOTH base and hedge
+    assets have valid data. This ensures fair comparison between hedged and
+    unhedged portfolios on the exact same time period.
     """
     (ticker, base_returns, hedge_returns, regime_labels, 
      targets, max_weight, weight_step, alpha, 
-     n_bootstrap, hypothesis_alpha, target_reduction, rf_rate, cvar_frequency, tie_break_tolerance) = args
+     n_bootstrap, hypothesis_alpha, target_reduction, rf_rate, cvar_frequency, tie_break_tolerance, 
+     hedge_frequency) = args
     
-    # Align data - use all available overlapping periods
-    aligned = pd.DataFrame({
-        'base': base_returns,
-        'hedge': hedge_returns,
-        'regime': regime_labels
-    }).dropna()
+    # Detect if hedge data is monthly (sparse observations)
+    # If hedge is monthly, resample base to monthly for fair comparison
+    if hedge_frequency == 'monthly':
+        # For monthly hedge data, we need to resample base returns to monthly
+        # Create aligned dataframe first
+        temp_df = pd.DataFrame({
+            'base': base_returns,
+            'hedge': hedge_returns,
+            'regime': regime_labels
+        })
+        
+        # Identify dates where hedge has data (monthly observations)
+        hedge_dates = temp_df[temp_df['hedge'].notna()].index.sort_values()
+        
+        if len(hedge_dates) > 0:
+            # For each hedge observation date, compound base returns for that month
+            # CRITICAL: Only use base returns UP TO AND INCLUDING the hedge date
+            monthly_data = []
+            
+            for hedge_date in hedge_dates:
+                # Get the month period for this hedge observation
+                hedge_month = hedge_date.to_period('M')
+                
+                # Get ALL dates in this month up to (and including) the hedge date
+                # This prevents look-ahead bias
+                month_start = hedge_month.to_timestamp()
+                month_mask = (temp_df.index >= month_start) & (temp_df.index <= hedge_date)
+                month_data = temp_df[month_mask]
+                
+                if len(month_data) > 0:
+                    # Compound daily base returns for this month
+                    # Only using data available UP TO the hedge observation date
+                    base_monthly = (1 + month_data['base']).prod() - 1
+                    hedge_monthly = month_data.loc[hedge_date, 'hedge']
+                    
+                    # Use most common regime in the month (up to observation date)
+                    regime_monthly = month_data['regime'].mode()
+                    regime_monthly = regime_monthly.iloc[0] if len(regime_monthly) > 0 else 0
+                    
+                    monthly_data.append({
+                        'date': hedge_date,  # Use exact hedge observation date
+                        'base': base_monthly,
+                        'hedge': hedge_monthly,
+                        'regime': regime_monthly
+                    })
+            
+            aligned = pd.DataFrame(monthly_data).set_index('date')
+        else:
+            aligned = pd.DataFrame(columns=['base', 'hedge', 'regime'])
+    else:
+        # Daily data - align as before
+        aligned = pd.DataFrame({
+            'base': base_returns,
+            'hedge': hedge_returns,
+            'regime': regime_labels
+        }).dropna()
     
-    if len(aligned) < 252:  # Need at least 1 year of data
+    # Adjust minimum data requirement based on frequency
+    min_periods = 12 if hedge_frequency == 'monthly' else 252  # 1 year of data
+    
+    if len(aligned) < min_periods:
+        # Still report date range even with insufficient data
+        data_info = {
+            'periods': len(aligned),
+            'frequency': hedge_frequency,
+            'error': f'Insufficient data (need {min_periods}+ periods)'
+        }
+        if len(aligned) > 0:
+            data_info['start_date'] = str(aligned.index[0].date())
+            data_info['end_date'] = str(aligned.index[-1].date())
+        
         return ticker, {
             'ticker': ticker,
             'correlations': {},
@@ -67,7 +134,7 @@ def _analyze_hedge_worker(args: Tuple) -> Tuple[str, Dict]:
             'hypothesis_tests': {},
             'optimal_weight': 0.0,
             'hedged_metrics': {},
-            'data_info': {'periods': len(aligned), 'error': 'Insufficient data'}
+            'data_info': data_info
         }
     
     aligned_base = aligned['base']
@@ -116,21 +183,53 @@ def _analyze_hedge_worker(args: Tuple) -> Tuple[str, Dict]:
         optimal_weight = 0.0
         hypothesis_results = {}
     
-    # Compute hedged metrics
+    # Compute hedged metrics with quarterly rebalancing
     if optimal_weight > 0:
-        hedged_returns = (1 - optimal_weight) * aligned_base + optimal_weight * aligned_hedge
+        # Create DataFrame with base and hedge returns
+        returns_df = pd.DataFrame({
+            'base': aligned_base,
+            'hedge': aligned_hedge
+        })
+        
+        # Target weights for quarterly rebalancing
+        target_weights = {
+            'base': 1 - optimal_weight,
+            'hedge': optimal_weight
+        }
+        
+        # Simulate portfolio with quarterly rebalancing
+        rebalanced_portfolio = simulate_rebalanced_portfolio(
+            returns=returns_df,
+            weights=target_weights,
+            rebalance_frequency='quarterly',
+            initial_value=1.0
+        )
+        
+        # Extract rebalanced portfolio returns
+        hedged_returns = rebalanced_portfolio['portfolio_return']
+        
         # Align risk-free rate to hedged returns
         aligned_rf = rf_rate.reindex(hedged_returns.index, method='ffill').mean()
         hedged_metrics = compute_all_metrics(hedged_returns, rf_rate=aligned_rf, 
                                              cvar_frequency=cvar_frequency)
+        
+        # Add rebalancing info to metrics
+        hedged_metrics['rebalancing'] = {
+            'frequency': 'quarterly',
+            'n_rebalances': int(rebalanced_portfolio['rebalance_flag'].sum()),
+            'avg_drift': float(rebalanced_portfolio['drift'].mean())
+        }
     else:
         hedged_metrics = {}
     
     # Add data info for reporting
+    # This reflects the ACTUAL analysis period (intersection of base and hedge data)
     data_info = {
         'periods': len(aligned),
+        'frequency': hedge_frequency,
         'start_date': str(aligned.index[0].date()),
-        'end_date': str(aligned.index[-1].date())
+        'end_date': str(aligned.index[-1].date()),
+        'note': f'Analysis uses overlapping {hedge_frequency} periods where both base and hedge have data'
     }
     
     return ticker, {
@@ -415,6 +514,9 @@ class Backtester:
         # Prepare arguments for parallel workers
         worker_args = []
         for ticker in hedge_tickers:
+            # Get hedge frequency (default to daily if not found)
+            hedge_freq = self.downloader.asset_frequencies.get(ticker, 'daily')
+            
             args = (
                 ticker,
                 base_returns,
@@ -429,7 +531,8 @@ class Backtester:
                 0.25,  # target_reduction for hypothesis tests
                 self.risk_free_rate,  # risk-free rate series
                 self.config['metrics'].get('cvar_frequency', 'monthly'),  # CVaR frequency
-                self.config['optimization'].get('tie_break_tolerance', 0.001)  # Tie-breaking tolerance
+                self.config['optimization'].get('tie_break_tolerance', 0.001),  # Tie-breaking tolerance
+                hedge_freq  # Hedge asset frequency ('daily' or 'monthly')
             )
             worker_args.append(args)
         
@@ -526,6 +629,36 @@ class Backtester:
             else:
                 max_weights[ticker] = self.hedge_weights[ticker]
         
+        # Extract efficiency scores from individual hedge analysis
+        hedge_efficiency = {}
+        if hasattr(self, 'individual_hedges') and self.individual_hedges:
+            for ticker in hedge_tickers:
+                if ticker in self.individual_hedges:
+                    hedge_data = self.individual_hedges[ticker]
+                    opt_results = hedge_data.get('optimization', [])
+                    
+                    # Calculate average efficiency across CVaR targets
+                    # Focus on primary target (25% reduction) if available
+                    cvar_results = [r for r in opt_results if r.get('metric') == 'cvar']
+                    
+                    if cvar_results:
+                        # Use primary target (25%) if available, otherwise average
+                        primary_result = next(
+                            (r for r in cvar_results if abs(r.get('target_reduction', 0) - 0.25) < 0.01),
+                            None
+                        )
+                        
+                        if primary_result and 'efficiency' in primary_result:
+                            hedge_efficiency[ticker] = primary_result['efficiency']
+                        else:
+                            # Average efficiency across all CVaR targets
+                            efficiencies = [r.get('efficiency', 0) for r in cvar_results if 'efficiency' in r]
+                            if efficiencies:
+                                hedge_efficiency[ticker] = sum(efficiencies) / len(efficiencies)
+        
+        # Get tie-breaking method from config
+        tie_break_method = self.config.get('optimization', {}).get('tie_break_method', 'efficiency')
+        
         # Optimize
         if method == 'greedy':
             weights = greedy_sequential_allocation(
@@ -538,7 +671,10 @@ class Backtester:
                 weight_step=self.config['optimization']['weight_step'],
                 alpha=self.config['metrics']['cvar_confidence'],
                 cvar_frequency=self.config['metrics'].get('cvar_frequency', 'monthly'),
-                tie_break_tolerance=self.config['optimization'].get('tie_break_tolerance', 0.001)
+                tie_break_tolerance=self.config['optimization'].get('tie_break_tolerance', 0.001),
+                hedge_efficiency=hedge_efficiency,
+                tie_break_method=tie_break_method,
+                tolerance=self.config['optimization'].get('tolerance', 0.005)
             )
         elif method == 'cvar':
             weights = optimize_multi_asset_cvar(
@@ -758,11 +894,12 @@ class Backtester:
             # Step 3: Analyze individual hedges (has its own progress bar)
             pipeline_pbar.set_postfix_str("Analyzing hedges...")
             individual_results = self.analyze_all_hedges()
+            self.individual_hedges = individual_results  # Store for multi-asset optimization
             pipeline_pbar.update(1)
             
             # Step 4: Build optimal portfolios (has its own progress bar)
             pipeline_pbar.set_postfix_str("Building portfolios...")
-            portfolio_targets = [0.10, 0.25, 0.50]
+            portfolio_targets = self.config.get('optimization', {}).get('targets', [0.10, 0.25, 0.50])
             portfolios = self._build_portfolios_parallel(portfolio_targets)
             pipeline_pbar.update(1)
             
@@ -777,13 +914,14 @@ class Backtester:
             
             # Step 3: Analyze individual hedges (parallelized)
             individual_results = self.analyze_all_hedges()
+            self.individual_hedges = individual_results  # Store for multi-asset optimization
             
             # Step 4: Build optimal portfolios (parallelized)
             print("\n" + "=" * 60)
             print("BUILDING OPTIMAL PORTFOLIOS")
             print("=" * 60)
             
-            portfolio_targets = [0.10, 0.25, 0.50]
+            portfolio_targets = self.config.get('optimization', {}).get('targets', [0.10, 0.25, 0.50])
             portfolios = self._build_portfolios_parallel(portfolio_targets)
         
         total_elapsed = time.time() - total_start

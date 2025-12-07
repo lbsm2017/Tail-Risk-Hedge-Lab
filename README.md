@@ -7,6 +7,7 @@
 
 Tail-Risk Hedge Lab answers: *"Which assets truly protect when stocks crash, and how much should you hold?"*
 
+In an apocryphal story, a statistician who had his head in the oven and his feet in the freezer exclaimed, “On average, I feel great!”
 ---
 
 ## What It Does
@@ -15,7 +16,7 @@ Tail-Risk Hedge Lab answers: *"Which assets truly protect when stocks crash, and
 - **Identifies crisis periods** using multiple detection methods
 - **Tests hedge assets** (bonds, gold, Bitcoin, managed futures, etc.)
 - **Finds optimal allocations** to reduce your portfolio risk by 10%, 25%, or 50%
-- **Generates a professional HTML report** with charts and statistics
+- **Generates HTML report** with charts and statistics
 
 ---
 

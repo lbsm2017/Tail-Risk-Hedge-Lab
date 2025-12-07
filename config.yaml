@@ -5,7 +5,7 @@ data:
   cache_path: "data/prices.parquet"
   import_folder: "data/import"  # Folder for custom Excel data files
   use_full_history: true    # Use all available data per asset (true) or common period only (false)
-  custom_assets_max_weight_multi: 0.15       # Default max allocation for Excel-imported assets (multi-asset portfolios)
+  custom_assets_max_weight_multi: 0.20       # Default max allocation for Excel-imported assets (multi-asset portfolios)
 
 assets:
   base: "ACWI"  # Base asset ticker (MSCI All Country World Index)
@@ -35,7 +35,7 @@ assets:
     - ticker: "CHF=X"
       name: "Swiss Franc (CHF)"
       min_weight: 0.00
-      max_weight: 0.10
+      max_weight: 0.05
     - ticker: "BTC-USD"
       name: "Bitcoin"
       min_weight: 0.00
@@ -56,6 +56,10 @@ metrics:
   cvar_confidence: 0.95
   cvar_frequency: "monthly"  # Options: "daily", "weekly", "monthly" - CVaR return frequency
   mar: 0.0  # Minimum acceptable return
+  rolling_windows:
+    daily: 63     # ~3 months of trading days
+    weekly: 52    # ~1 year of weeks
+    monthly: 12   # 1 year of months
   risk_free_rate:
     source: "FRED"       # "FRED" to download from FRED, "static" for fixed value
     ticker: "DGS3MO"     # FRED ticker: DGS3MO (3-month Treasury), DTB3, etc.
@@ -67,12 +71,13 @@ optimization:
   targets: [0.10, 0.25, 0.50]  # Find weights to achieve 10%, 25%, 50% reduction
   weight_step: 0.01
   tolerance: 0.005  # Accept solution within X% of target
-  tie_break_tolerance: 0.001  # Risk difference threshold (0.1%) for CAGR tie-breaking
+  tie_break_tolerance: 0.001  # Risk difference threshold (0.1%) for tie-breaking
+  tie_break_method: "efficiency"  # Options: 'efficiency', 'cagr', 'crisis_correlation'
   max_total_hedge_weight: 0.67  # Max combined hedge allocation (1 - base_min_weight_multi)
 
 hypothesis:
   alpha: 0.05
-  n_bootstrap: 2500 # Number of bootstrap samples - can be increased to 10,000+ with vectorized CVaR
+  n_bootstrap: 500 # Number of bootstrap samples - can be increased to 10,000+ with vectorized CVaR
   bootstrap_parallel: true        # Enable parallel bootstrap processing (with joblib)
   bootstrap_chunk_size: 1000      # Samples per parallel chunk
   bootstrap_n_jobs: -1            # Number of parallel jobs (-1 = all CPUs)

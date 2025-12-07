@@ -47,6 +47,8 @@ class DataDownloader:
         self.returns = None
         # Track actual asset inception dates (before any filling/merging)
         self.asset_inception_dates = {}
+        # Track return frequency for each asset ('daily' or 'monthly')
+        self.asset_frequencies = {}
         
         # Build ticker list from config (passed via parent during initialization)
         # This will be set by _build_ticker_list() after full config is available
@@ -171,12 +173,12 @@ class DataDownloader:
                 df = df.loc[acwi_valid:]
                 print(f"\nAligned to ACWI start date: {acwi_valid.date()}")
         
-        # Forward fill up to 5 days for minor gaps (weekends, holidays)
-        df = df.ffill(limit=5)
+        # Do NOT forward-fill or back-fill - preserve actual data only
+        # NaN values will be handled properly during analysis alignment
         
-        # Report missing data after forward fill
+        # Report missing data
         missing_pct = (df.isnull().sum() / len(df) * 100).round(2)
-        print("\nMissing data percentage (after forward fill):")
+        print("\nMissing data percentage:")
         for ticker, pct in missing_pct.items():
             if pct > 0:
                 print(f"  {ticker}: {pct:.2f}%")
@@ -388,7 +390,8 @@ class DataDownloader:
                 missing_after = rf_rate.isnull().sum()
                 print(f"  Interpolated {missing_before - missing_after} missing values")
             
-            # Still have NaN at edges? Forward/backward fill
+            # Forward-fill and back-fill to ensure complete coverage
+            # Risk-free rate is a market observable that should have continuous values
             if rf_rate.isnull().any():
                 rf_rate = rf_rate.ffill().bfill()
             
@@ -567,14 +570,17 @@ class DataDownloader:
             else:
                 is_monthly = False
             
+            # Store frequency metadata
+            self.asset_frequencies[asset_name] = 'monthly' if is_monthly else 'daily'
+            
             if is_monthly:
                 # Resample main returns to monthly for comparison
                 # But for backtesting, we'll expand monthly returns to daily
                 # by assigning the monthly return to the last day of each month
                 
-                # Create a daily series with the monthly returns on month-end dates
+                # Create a daily series with NaN (not zeros!) for proper alignment
                 daily_returns = pd.Series(index=self.returns.index, dtype=float)
-                daily_returns[:] = 0.0  # Default to 0
+                # Do NOT fill with zeros - keep NaN for dates without data
                 
                 for date, ret in returns.items():
                     # Find the closest date in our index
@@ -586,19 +592,31 @@ class DataDownloader:
                         daily_returns[last_day] = ret
                 
                 self.returns[asset_name] = daily_returns
-                print(f"  Added {asset_name} (monthly -> daily, {(daily_returns != 0).sum()} months)")
+                n_valid = daily_returns.notna().sum()
+                first_valid = daily_returns.first_valid_index()
+                last_valid = daily_returns.last_valid_index()
+                print(f"  Added {asset_name} (monthly -> daily, {n_valid} months)")
+                if first_valid and last_valid:
+                    print(f"    Data range: {first_valid.date()} to {last_valid.date()}")
             else:
                 # Daily data - just merge directly
+                # Reindex will create NaN for dates outside the custom asset's range
                 self.returns[asset_name] = returns.reindex(self.returns.index)
                 n_valid = self.returns[asset_name].notna().sum()
+                first_valid = self.returns[asset_name].first_valid_index()
+                last_valid = self.returns[asset_name].last_valid_index()
                 print(f"  Added {asset_name} (daily, {n_valid} periods)")
+                if first_valid and last_valid:
+                    print(f"    Data range: {first_valid.date()} to {last_valid.date()}")
         
         # Also create synthetic prices for reporting (not needed for returns-based analysis)
+        # CRITICAL: Do NOT fill NaN - preserve actual data periods only
         if self.prices is not None:
             for asset_name in custom_returns.keys():
                 if asset_name in self.returns.columns:
                     # Create synthetic price series starting at 100
-                    ret_series = self.returns[asset_name].fillna(0)
+                    # Keep NaN for periods without data - no filling
+                    ret_series = self.returns[asset_name]  # Keep NaN as-is
                     price_series = 100 * np.exp(ret_series.cumsum())
                     self.prices[asset_name] = price_series
     

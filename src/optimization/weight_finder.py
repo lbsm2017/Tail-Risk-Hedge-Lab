@@ -69,10 +69,11 @@ def find_weight_for_target_reduction(
     **kwargs
 ) -> Dict:
     """
-    Find hedge weight that achieves exactly the target risk reduction.
+    Find the MINIMAL hedge weight that achieves the target risk reduction.
     
-    The weight floats between min and max to find the value that 
-    produces the desired reduction in CVaR or MDD.
+    Strategy: Among all weights that achieve the target reduction, select the
+    smallest weight. This minimizes hedge allocation while meeting risk goals.
+    The optimal weight is then maintained through quarterly rebalancing.
     
     Args:
         base_returns: Base portfolio returns (100% ACWI)
@@ -145,12 +146,13 @@ def find_weight_for_target_reduction(
                 })
     
     # Second pass: among viable candidates, select MINIMUM weight
+    # Goal: Find the smallest weight that achieves the target risk reduction
     if viable_candidates:
         # Find the minimum weight among candidates that achieve target
         min_weight_value = min(c['weight'] for c in viable_candidates)
         min_weight_candidates = [c for c in viable_candidates if c['weight'] == min_weight_value]
         
-        # Third pass: if multiple minimum weights exist, use CAGR tie-breaking
+        # Third pass: if multiple solutions at minimum weight exist (edge case), use CAGR tie-breaking
         if len(min_weight_candidates) > 1:
             best_cagr = -np.inf
             best_candidate = None
@@ -170,7 +172,7 @@ def find_weight_for_target_reduction(
                 best_risk = best_candidate['risk']
                 best_reduction = best_candidate['reduction']
         else:
-            # Only one minimum weight candidate
+            # Only one minimum weight candidate - use it
             best_weight = min_weight_candidates[0]['weight']
             best_risk = min_weight_candidates[0]['risk']
             best_reduction = min_weight_candidates[0]['reduction']
@@ -226,7 +228,7 @@ def find_weights_for_all_targets(
 ) -> pd.DataFrame:
     """
     Find optimal weights for multiple target reductions.
-    Parallelized for performance.
+    Parallelized for performance. Includes efficiency metric calculation.
     
     Args:
         base_returns: Base portfolio returns
@@ -240,7 +242,8 @@ def find_weights_for_all_targets(
         tolerance: Acceptable deviation from target
         
     Returns:
-        DataFrame with results for each (target, metric) combination
+        DataFrame with results for each (target, metric) combination.
+        Includes 'efficiency' column: risk reduction per unit weight.
     """
     def optimize_single(args):
         metric, target = args
@@ -267,7 +270,19 @@ def find_weights_for_all_targets(
         for future in futures:
             results.append(future.result())
     
-    return pd.DataFrame(results)
+    # Convert to DataFrame and add efficiency metric
+    df = pd.DataFrame(results)
+    
+    # Efficiency = risk reduction per unit weight
+    # Higher efficiency = more risk reduction per 1% allocation
+    # Zero efficiency when no weight allocated OR no reduction achieved
+    df['efficiency'] = df.apply(
+        lambda row: row['achieved_reduction'] / row['optimal_weight'] 
+        if row['optimal_weight'] > 0 and row['achieved_reduction'] > 0 else 0.0,
+        axis=1
+    )
+    
+    return df
 
 
 # Backwards compatibility alias

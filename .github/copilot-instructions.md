@@ -26,6 +26,8 @@ main.py → Backtester.run_full_backtest() → HTML Report
 - Central orchestrator using `ThreadPoolExecutor` for parallel hedge analysis
 - Worker function `_analyze_hedge_worker()` is module-level (not method) for pickle compatibility
 - Loads config via `yaml.safe_load()` from `config.yaml`
+- **Individual hedge testing**: Finds MINIMAL weight to achieve target risk reduction, applies quarterly rebalancing
+- **Multi-asset optimization**: Uses efficiency-based tie-breaking (risk reduction per weight unit) when multiple assets have similar risk profiles
 
 ### Adding New Hedge Assets
 1. Add ticker to `config.yaml` under `assets.hedges` with `min_weight`/`max_weight`
@@ -59,10 +61,12 @@ pip install -r requirements.txt
 
 ```yaml
 optimization:
-  targets: [0.10, 0.25, 0.50]  # CVaR reduction targets (10%, 25%, 50%)
-  tolerance: 0.02              # Accept within 2% of target
+  targets: [0.10, 0.25, 0.50]        # CVaR reduction targets (10%, 25%, 50%)
+  tolerance: 0.02                    # Accept within 2% of target
+  tie_break_method: "efficiency"     # Options: 'efficiency', 'cagr', 'crisis_correlation'
+  tie_break_tolerance: 0.001         # Risk difference threshold (0.1%) for tie-breaking
 regime:
-  method: "ensemble"           # Crisis detection method
+  method: "ensemble"                 # Crisis detection method
 ```
 
 ## Code Style Patterns
@@ -71,6 +75,7 @@ regime:
 - **Docstrings**: Google-style with Args/Returns sections
 - **Progress bars**: Conditional `tqdm` import with `TQDM_AVAILABLE` fallback
 - **Parallel processing**: ThreadPoolExecutor for I/O, module-level workers for ProcessPoolExecutor
+- **Rebalancing**: Quarterly rebalancing applied via `simulate_rebalanced_portfolio()` for realistic portfolio behavior
 
 ## Report Generation (`src/reporting/report.py`)
 
