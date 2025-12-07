@@ -8,7 +8,7 @@ Tests cover:
 4. Config-based tie-break method selection
 """
 
-import pytest
+import unittest
 import pandas as pd
 import numpy as np
 from src.optimization.weight_finder import find_weights_for_all_targets
@@ -16,7 +16,7 @@ from src.optimization.multi_asset import greedy_sequential_allocation
 from src.metrics.tail_risk import cvar
 
 
-class TestEfficiencyCalculation:
+class TestEfficiencyCalculation(unittest.TestCase):
     """Test efficiency metric calculation in individual analysis."""
     
     def test_efficiency_added_to_results(self):
@@ -112,7 +112,7 @@ class TestEfficiencyCalculation:
             f"Good hedge should have higher efficiency: {good_eff} vs {poor_eff}"
 
 
-class TestGreedyAllocationTieBreaking:
+class TestGreedyAllocationTieBreaking(unittest.TestCase):
     """Test tie-breaking logic in greedy sequential allocation."""
     
     def test_efficiency_tie_breaking(self):
@@ -243,7 +243,7 @@ class TestGreedyAllocationTieBreaking:
             f"H2 weight {weights['H2']} exceeds max {max_weights['H2']}"
 
 
-class TestIntegration:
+class TestIntegration(unittest.TestCase):
     """Integration tests for full pipeline."""
     
     def test_end_to_end_efficiency_flow(self):
@@ -316,4 +316,4 @@ class TestIntegration:
 
 
 if __name__ == '__main__':
-    pytest.main([__file__, '-v'])
+    unittest.main()

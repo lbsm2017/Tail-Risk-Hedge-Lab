@@ -218,7 +218,7 @@ class TestDataLeakagePrevention(unittest.TestCase):
         base = pd.Series(0.001, index=dates)
         
         # Monthly hedge on last business day of each month
-        monthly_dates = pd.date_range('2020-01-31', '2020-12-31', freq='M')
+        monthly_dates = pd.date_range('2020-01-31', '2020-12-31', freq='ME')
         # Adjust to business days
         monthly_dates = pd.DatetimeIndex([
             dates[dates <= d][-1] for d in monthly_dates
@@ -260,7 +260,7 @@ class TestFrequencyDetection(unittest.TestCase):
     
     def test_monthly_frequency_detection(self):
         """Detect monthly data correctly."""
-        dates = pd.date_range('2020-01-31', '2020-12-31', freq='M')
+        dates = pd.date_range('2020-01-31', '2020-12-31', freq='ME')
         returns = pd.Series(0.02, index=dates)
         
         if len(returns) > 1:

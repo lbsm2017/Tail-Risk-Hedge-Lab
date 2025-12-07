@@ -55,7 +55,7 @@ def resample_returns(returns: Union[pd.Series, np.ndarray], frequency: str = 'mo
         return returns.resample('W-FRI').sum()
     elif frequency == 'monthly':
         # Sum log returns within each month
-        return returns.resample('M').sum()
+        return returns.resample('ME').sum()
     else:
         raise ValueError(f"Invalid frequency '{frequency}'. Must be 'daily', 'weekly', or 'monthly'.")
 
