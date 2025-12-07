@@ -77,7 +77,7 @@ optimization:
 
 hypothesis:
   alpha: 0.05
-  n_bootstrap: 5000 # Number of bootstrap samples - can be increased to 10,000+ with vectorized CVaR
+  n_bootstrap: 500 # Number of bootstrap samples - can be increased to 10,000+ with vectorized CVaR
   bootstrap_parallel: true        # Enable parallel bootstrap processing (with joblib)
   bootstrap_chunk_size: 1000      # Samples per parallel chunk
   bootstrap_n_jobs: -1            # Number of parallel jobs (-1 = all CPUs)

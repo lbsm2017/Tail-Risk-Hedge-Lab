@@ -591,23 +591,32 @@ def sharpe_ratio(returns: np.ndarray, rf_rate: float = 0.0, periods_per_year: in
 
 def cagr(returns: np.ndarray, periods_per_year: int = 252) -> float:
     """
-    Calculate Compound Annual Growth Rate.
+    Calculate Compound Annual Growth Rate from simple returns.
+    
+    Uses geometric compounding: (1+r1) * (1+r2) * ... * (1+rn) - 1
+    This correctly handles simple returns from pct_change().
     
     Args:
-        returns: Array of returns
-        periods_per_year: Number of periods per year
+        returns: Array of simple returns (not log returns)
+        periods_per_year: Number of periods per year (252=daily, 12=monthly)
         
     Returns:
-        Annualized return (CAGR)
+        Annualized return (CAGR) as decimal (e.g., 0.10 = 10%)
     """
     if len(returns) == 0:
         return np.nan
     
-    total_return = np.exp(np.sum(returns)) - 1
+    # Compute cumulative return using geometric compounding
+    # (1+r1) * (1+r2) * ... * (1+rn) - 1
+    total_return = np.prod(1 + returns) - 1
     n_years = len(returns) / periods_per_year
     
     if n_years == 0:
         return np.nan
+    
+    # Handle negative total returns (can't take fractional root of negative)
+    if total_return <= -1:
+        return -1.0  # Total loss
     
     return (1 + total_return) ** (1 / n_years) - 1
 

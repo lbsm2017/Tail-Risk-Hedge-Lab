@@ -673,7 +673,8 @@ class Backtester:
                 cvar_frequency=self.config['metrics'].get('cvar_frequency', 'monthly'),
                 tie_break_tolerance=self.config['optimization'].get('tie_break_tolerance', 0.001),
                 hedge_efficiency=hedge_efficiency,
-                tie_break_method=tie_break_method
+                tie_break_method=tie_break_method,
+                tolerance=self.config['optimization'].get('tolerance', 0.005)
             )
         elif method == 'cvar':
             weights = optimize_multi_asset_cvar(
@@ -898,7 +899,7 @@ class Backtester:
             
             # Step 4: Build optimal portfolios (has its own progress bar)
             pipeline_pbar.set_postfix_str("Building portfolios...")
-            portfolio_targets = [0.10, 0.25, 0.50]
+            portfolio_targets = self.config.get('optimization', {}).get('targets', [0.10, 0.25, 0.50])
             portfolios = self._build_portfolios_parallel(portfolio_targets)
             pipeline_pbar.update(1)
             
@@ -920,7 +921,7 @@ class Backtester:
             print("BUILDING OPTIMAL PORTFOLIOS")
             print("=" * 60)
             
-            portfolio_targets = [0.10, 0.25, 0.50]
+            portfolio_targets = self.config.get('optimization', {}).get('targets', [0.10, 0.25, 0.50])
             portfolios = self._build_portfolios_parallel(portfolio_targets)
         
         total_elapsed = time.time() - total_start
