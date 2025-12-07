@@ -390,7 +390,7 @@ class DataDownloader:
             
             # Still have NaN at edges? Forward/backward fill
             if rf_rate.isnull().any():
-                rf_rate = rf_rate.fillna(method='ffill').fillna(method='bfill')
+                rf_rate = rf_rate.ffill().bfill()
             
             print(f"  Downloaded {len(rf_rate)} observations")
             print(f"  Mean rate: {rf_rate.mean():.2%}")
