@@ -140,6 +140,7 @@ Tail-Risk-Hedge-Lab/
 For methodology, math formulas, and academic references, see:
 - **[Full Methodology](docs/methodology.md)** — Crisis detection, risk metrics, optimization algorithms
 - **[Risk-Free Rate Integration](docs/risk_free_rate_integration.md)** — How Sharpe ratios are calculated
+- **[Security Policy](SECURITY.md)** — Vulnerability reporting and security best practices
 
 ---
 
