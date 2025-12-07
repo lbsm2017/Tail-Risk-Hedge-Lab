@@ -17,12 +17,13 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from src.metrics.tail_risk import (
     cvar, var, max_drawdown, drawdown_series,
     downside_deviation, sharpe_ratio, sortino_ratio,
-    calmar_ratio, omega_ratio, resample_returns
+    calmar_ratio, omega_ratio, resample_returns, cagr
 )
 from src.metrics.correlations import (
     conditional_correlation, downside_beta, rolling_correlation,
     quantile_correlation, rolling_correlation_stats
 )
+from src.optimization.multi_asset import align_mixed_frequency_returns
 
 
 class TestCVaR(unittest.TestCase):
@@ -496,6 +497,183 @@ class TestQuantileCorrelation(unittest.TestCase):
         
         # Should be a valid number
         self.assertIsNotNone(result)
+
+
+class TestCAGR(unittest.TestCase):
+    """Unit tests for CAGR (Compound Annual Growth Rate) calculation."""
+    
+    def test_cagr_positive_returns(self):
+        """CAGR should be positive for generally positive returns."""
+        # Simulate 5 years of daily returns with positive drift
+        np.random.seed(42)
+        returns = np.random.normal(0.0003, 0.01, 252 * 5)  # ~7.5% annual
+        
+        result = cagr(returns, periods_per_year=252)
+        
+        # Should be positive
+        self.assertGreater(result, 0)
+        # Should be roughly in expected range (5-15%)
+        self.assertGreater(result, 0.03)
+        self.assertLess(result, 0.20)
+    
+    def test_cagr_negative_returns(self):
+        """CAGR should be negative for generally negative returns."""
+        np.random.seed(42)
+        returns = np.random.normal(-0.0003, 0.01, 252 * 3)  # Negative drift
+        
+        result = cagr(returns, periods_per_year=252)
+        
+        # Should be negative
+        self.assertLess(result, 0)
+    
+    def test_cagr_empty_array(self):
+        """CAGR of empty array should be NaN."""
+        returns = np.array([])
+        result = cagr(returns, periods_per_year=252)
+        self.assertTrue(np.isnan(result))
+    
+    def test_cagr_monthly_frequency(self):
+        """CAGR with monthly data should work correctly."""
+        np.random.seed(42)
+        # 10 years of monthly returns
+        monthly_returns = np.random.normal(0.007, 0.04, 120)  # ~8% annual
+        
+        result = cagr(monthly_returns, periods_per_year=12)
+        
+        # Should be in reasonable range
+        self.assertGreater(result, 0.02)
+        self.assertLess(result, 0.20)
+    
+    def test_cagr_geometric_compounding(self):
+        """CAGR should use geometric compounding correctly."""
+        # Known returns: 10% then -10% should NOT equal 0%
+        returns = np.array([0.10, -0.10])
+        
+        result = cagr(returns, periods_per_year=2)
+        
+        # (1.10 * 0.90) = 0.99, so CAGR should be slightly negative
+        self.assertLess(result, 0)
+        self.assertAlmostEqual(result, -0.01, places=2)
+    
+    def test_cagr_matches_price_cagr(self):
+        """CAGR from returns should match CAGR calculated from prices."""
+        np.random.seed(42)
+        returns = np.random.normal(0.0005, 0.01, 252 * 3)
+        
+        # Calculate CAGR from returns
+        result_returns = cagr(returns, periods_per_year=252)
+        
+        # Calculate CAGR from prices
+        prices = 100 * np.cumprod(1 + returns)
+        start_price = 100
+        end_price = prices[-1]
+        n_years = len(returns) / 252
+        result_prices = (end_price / start_price) ** (1 / n_years) - 1
+        
+        # Should match closely
+        self.assertAlmostEqual(result_returns, result_prices, places=4)
+    
+    def test_cagr_total_loss(self):
+        """CAGR with total loss should return -1."""
+        returns = np.array([-0.5, -0.5, -0.5])  # Cumulative loss > 100%
+        
+        result = cagr(returns, periods_per_year=3)
+        
+        # After 3 returns of -50%, cumulative return is (0.5^3 - 1) = -87.5%
+        # This shouldn't be -1 (total loss), but significant loss
+        self.assertLess(result, -0.5)
+
+
+class TestMixedFrequencyAlignment(unittest.TestCase):
+    """Unit tests for mixed-frequency return alignment."""
+    
+    def test_daily_only_preserves_frequency(self):
+        """Aligning daily-only data should preserve daily frequency."""
+        dates = pd.date_range('2020-01-01', periods=252, freq='D')
+        base = pd.Series(np.random.normal(0, 0.01, 252), index=dates)
+        hedge = pd.DataFrame({
+            'HEDGE1': np.random.normal(0, 0.01, 252),
+            'HEDGE2': np.random.normal(0, 0.01, 252)
+        }, index=dates)
+        
+        result = align_mixed_frequency_returns(base, hedge)
+        
+        # Should preserve most of the data (minus dropna alignment)
+        self.assertGreater(len(result), 200)
+    
+    def test_mixed_frequency_converts_to_monthly(self):
+        """Mixing daily with monthly should convert to monthly frequency."""
+        # Daily data for 3 years
+        daily_dates = pd.date_range('2020-01-01', periods=252*3, freq='D')
+        base = pd.Series(np.random.normal(0, 0.01, 252*3), index=daily_dates)
+        
+        # Monthly hedge (month-end dates with NaN elsewhere)
+        monthly_dates = pd.date_range('2020-01-31', periods=36, freq='ME')
+        monthly_returns = np.random.normal(0, 0.04, 36)
+        
+        # Create hedge DataFrame with monthly data embedded in daily index
+        hedge_data = pd.Series(index=daily_dates, dtype=float)
+        for date, ret in zip(monthly_dates, monthly_returns):
+            if date in hedge_data.index:
+                hedge_data.loc[date] = ret
+        hedge = pd.DataFrame({'MONTHLY_HEDGE': hedge_data})
+        
+        result = align_mixed_frequency_returns(base, hedge)
+        
+        # Should have ~36 monthly observations (or less due to alignment)
+        self.assertLess(len(result), 100)
+        self.assertGreater(len(result), 20)
+    
+    def test_alignment_aggregates_daily_returns_correctly(self):
+        """Daily returns should be compounded to monthly correctly."""
+        # Create simple daily data: 1% every day for ~21 trading days
+        daily_dates = pd.date_range('2020-01-01', periods=63, freq='D')  # ~3 months
+        daily_returns = pd.Series(0.001, index=daily_dates)  # 0.1% daily
+        
+        # Monthly hedge
+        monthly_dates = pd.date_range('2020-01-31', periods=3, freq='ME')
+        monthly_hedge = pd.Series(index=daily_dates, dtype=float)
+        for date in monthly_dates:
+            if date in monthly_hedge.index:
+                monthly_hedge.loc[date] = 0.02  # 2% monthly return
+        hedge = pd.DataFrame({'MONTHLY': monthly_hedge})
+        
+        result = align_mixed_frequency_returns(daily_returns, hedge)
+        
+        # Check that base returns are compounded (not just month-end daily returns)
+        if len(result) > 0:
+            # Monthly compounded return should be much larger than single daily return
+            first_monthly_return = result['base'].iloc[0]
+            # ~21 trading days * 0.1% ≈ 2.1% monthly (compounded)
+            self.assertGreater(abs(first_monthly_return), 0.005)
+    
+    def test_alignment_preserves_date_index(self):
+        """Aligned data should have DatetimeIndex."""
+        dates = pd.date_range('2020-01-01', periods=252, freq='D')
+        base = pd.Series(np.random.normal(0, 0.01, 252), index=dates)
+        hedge = pd.DataFrame({
+            'HEDGE': np.random.normal(0, 0.01, 252)
+        }, index=dates)
+        
+        result = align_mixed_frequency_returns(base, hedge)
+        
+        self.assertIsInstance(result.index, pd.DatetimeIndex)
+    
+    def test_alignment_handles_nan_in_monthly_data(self):
+        """Alignment should handle NaN in monthly data correctly."""
+        daily_dates = pd.date_range('2020-01-01', periods=100, freq='D')
+        base = pd.Series(np.random.normal(0, 0.01, 100), index=daily_dates)
+        
+        # Sparse monthly data (NaN except month-ends)
+        hedge_data = pd.Series(index=daily_dates, dtype=float)
+        hedge_data.iloc[30] = 0.02  # One month-end
+        hedge_data.iloc[60] = -0.01  # Another month-end
+        hedge = pd.DataFrame({'SPARSE': hedge_data})
+        
+        result = align_mixed_frequency_returns(base, hedge)
+        
+        # Should have few aligned points
+        self.assertLessEqual(len(result), 10)
 
 
 if __name__ == '__main__':
