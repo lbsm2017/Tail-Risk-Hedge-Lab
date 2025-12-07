@@ -637,7 +637,7 @@ def generate_html_report(
     <div class="container">
         <header>
             <div class="report-title">Tail-Risk Hedge Analysis</div>
-            <div class="report-subtitle">Optimal Portfolio Protection Strategies</div>
+            <div class="report-subtitle">Optimal Portfolio Protection Strategies for {base_name} ({base_ticker})</div>
             <div class="report-date">{report_date}</div>
         </header>
         
@@ -771,15 +771,14 @@ def generate_html_report(
 """
     
     # Detailed breakdown per asset
+    # Get individual analysis max weight from config (complement of base_min_weight_individual)
+    individual_max_weight = 1.0 - config.get('assets', {}).get('base_min_weight_individual', 0.50)
+    
     for ticker, hedge_data in individual_hedges.items():
         asset_name = get_asset_name(ticker, hedge_names)
         
-        # Get max weight constraint
-        max_weight = 0.50
-        for h in config.get('assets', {}).get('hedges', []):
-            if h.get('ticker') == ticker:
-                max_weight = h.get('max_weight', 0.50)
-                break
+        # For individual analysis, use uniform constraint (not per-asset limits)
+        max_weight = individual_max_weight
         
         # Get data period info
         data_info = hedge_data.get('data_info', {})
@@ -797,7 +796,7 @@ def generate_html_report(
                     <tr>
                         <th>Target</th>
                         <th>Metric</th>
-                        <th>Unhedged Risk</th>
+                        <th>{base_ticker} Risk (Unhedged)</th>
                         <th>Hedged Risk</th>
                         <th>Weight Used</th>
                         <th>Status</th>

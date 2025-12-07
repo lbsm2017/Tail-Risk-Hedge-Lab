@@ -5,30 +5,29 @@ data:
   cache_path: "data/prices.parquet"
   import_folder: "data/import"  # Folder for custom Excel data files
   use_full_history: true    # Use all available data per asset (true) or common period only (false)
-  custom_assets_max_weight_individual: 0.50  # Default max allocation for Excel-imported assets (single-asset tests)
-  custom_assets_max_weight_multi: 0.50       # Default max allocation for Excel-imported assets (multi-asset portfolios)
+  custom_assets_max_weight_multi: 0.15       # Default max allocation for Excel-imported assets (multi-asset portfolios)
 
 assets:
-  base: "ACWI"
-  base_min_weight_individual: 0.50  # Min ACWI weight for single-asset tests
-  base_min_weight_multi: 0.33       # Min ACWI weight for multi-asset portfolios
-  hedges:
+  base: "ACWI"  # Base asset ticker (MSCI All Country World Index)
+  base_min_weight_individual: 0.50  # Min base weight for single-asset tests (hedge max = 1 - this value)
+  base_min_weight_multi: 0.33       # Min base weight for multi-asset portfolios
+  hedges:  # max_weight applies ONLY to multi-asset portfolios; individual tests use base_min_weight_individual
     - ticker: "TLT"
       name: "Long Treasury (20+ Year)"
       min_weight: 0.00
-      max_weight: 0.25
+      max_weight: 0.33
     - ticker: "IEF"
       name: "Intermediate Treasury (7-10 Year)"
       min_weight: 0.00
-      max_weight: 0.25
+      max_weight: 0.33
     - ticker: "SHY"
       name: "Short Treasury (1-3 Year)"
       min_weight: 0.00
-      max_weight: 0.25
+      max_weight: 0.33
     - ticker: "GLD"
       name: "Gold"
       min_weight: 0.00
-      max_weight: 0.05
+      max_weight: 0.10
     - ticker: "SLV"
       name: "Silver"
       min_weight: 0.00
@@ -36,7 +35,7 @@ assets:
     - ticker: "CHF=X"
       name: "Swiss Franc (CHF)"
       min_weight: 0.00
-      max_weight: 0.05
+      max_weight: 0.10
     - ticker: "BTC-USD"
       name: "Bitcoin"
       min_weight: 0.00
@@ -44,7 +43,7 @@ assets:
     - ticker: "DBMF"
       name: "Managed Futures (Trend Following)"
       min_weight: 0.00
-      max_weight: 0.30
+      max_weight: 0.33
 
 regime:
   method: "ensemble"  # or 'drawdown', 'vix', 'markov', 'volatility'

@@ -97,30 +97,42 @@ class RegimeDetector:
         - Enter crisis when VIX > crisis_threshold
         - Exit crisis when VIX < recovery_threshold
         
+        Optimized using numpy arrays for faster iteration.
+        
         Args:
             vix: VIX series
             
         Returns:
             Binary regime (0=Normal, 1=Crisis)
         """
-        regime = pd.Series(0, index=vix.index)
+        import numpy as np
+        
+        # Convert to numpy for faster iteration
+        vix_values = vix.values
+        n = len(vix_values)
+        regime_arr = np.zeros(n, dtype=np.int32)
+        
+        crisis_threshold = self.vix_crisis_threshold
+        recovery_threshold = self.vix_recovery_threshold
         current_state = 0  # Start in normal
         
-        for i, (date, vix_value) in enumerate(vix.items()):
-            if pd.isna(vix_value):
-                regime.iloc[i] = current_state
+        for i in range(n):
+            vix_value = vix_values[i]
+            
+            if np.isnan(vix_value):
+                regime_arr[i] = current_state
                 continue
             
             if current_state == 0:  # Currently normal
-                if vix_value > self.vix_crisis_threshold:
+                if vix_value > crisis_threshold:
                     current_state = 1  # Enter crisis
             else:  # Currently in crisis
-                if vix_value < self.vix_recovery_threshold:
+                if vix_value < recovery_threshold:
                     current_state = 0  # Exit crisis
             
-            regime.iloc[i] = current_state
+            regime_arr[i] = current_state
         
-        return regime
+        return pd.Series(regime_arr, index=vix.index)
     
     def volatility_percentile_regime(
         self,
@@ -214,6 +226,9 @@ class RegimeDetector:
         """
         Ensemble method combining multiple signals with majority voting.
         
+        Uses parallel execution to run all regime detection methods concurrently,
+        significantly reducing total computation time.
+        
         Args:
             prices: Price series
             returns: Return series
@@ -222,24 +237,36 @@ class RegimeDetector:
         Returns:
             Binary regime (0=Normal, 1=Crisis)
         """
-        # Collect all regime signals
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        
+        # Define worker functions for parallel execution
+        def run_drawdown():
+            return ('drawdown', self.drawdown_regime(prices))
+        
+        def run_volatility():
+            return ('volatility', self.volatility_percentile_regime(returns))
+        
+        def run_markov():
+            return ('markov', self.markov_regime(returns))
+        
+        def run_vix():
+            if vix is not None:
+                vix_signal = self.vix_regime(vix)
+                # Align with returns index
+                vix_signal = vix_signal.reindex(returns.index, fill_value=0)
+                return ('vix', vix_signal)
+            return None
+        
+        # Run all regime methods in parallel
         signals = []
+        workers = [run_drawdown, run_volatility, run_markov, run_vix]
         
-        # 1. Drawdown signal
-        signals.append(self.drawdown_regime(prices))
-        
-        # 2. Volatility signal
-        signals.append(self.volatility_percentile_regime(returns))
-        
-        # 3. Markov signal
-        signals.append(self.markov_regime(returns))
-        
-        # 4. VIX signal (if available)
-        if vix is not None:
-            vix_signal = self.vix_regime(vix)
-            # Align with returns index
-            vix_signal = vix_signal.reindex(returns.index, fill_value=0)
-            signals.append(vix_signal)
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            futures = [executor.submit(worker) for worker in workers]
+            for future in as_completed(futures):
+                result = future.result()
+                if result is not None:
+                    signals.append(result[1])
         
         # Combine into DataFrame
         signal_df = pd.concat(signals, axis=1)

@@ -188,6 +188,10 @@ class Backtester:
             self.hedge_weights[ticker] = hedge.get('max_weight', 0.50)
             self.hedge_names[ticker] = hedge.get('name', ticker)
         
+        # Individual asset analysis constraint: complement of base_min_weight_individual
+        # All individual hedge tests can go up to this limit (e.g., 50%)
+        self.individual_max_hedge_weight = 1.0 - self.config['assets'].get('base_min_weight_individual', 0.50)
+        
     def load_data(self, use_cache: bool = True) -> None:
         """
         Load and prepare data, including custom Excel files from data/import.
@@ -221,13 +225,13 @@ class Backtester:
             self.returns = self.downloader.returns
             
             # Add custom assets to hedge config if not already there
-            # Use individual test max weight (single-asset analysis uses higher max)
-            default_max_weight = self.config.get('data', {}).get('custom_assets_max_weight_individual', 0.50)
+            # Use multi-asset max weight for custom assets in portfolio construction
+            default_max_weight = self.config.get('data', {}).get('custom_assets_max_weight_multi', 0.15)
             for asset_name in custom_data.keys():
                 if asset_name not in self.hedge_weights:
                     self.hedge_weights[asset_name] = default_max_weight
                     self.hedge_names[asset_name] = asset_name  # Use filename as display name
-                    print(f"  Added custom hedge: {asset_name} (max weight: {default_max_weight:.0%})")
+                    print(f"  Added custom hedge: {asset_name} (multi-asset max: {default_max_weight:.0%})")
         
         # Extract VIX if available
         if '^VIX' in self.prices.columns:
@@ -345,7 +349,7 @@ class Backtester:
             hedge_returns=hedge_returns,
             targets=self.config['optimization']['targets'],
             metrics=['cvar', 'mdd'],
-            max_weight=self.hedge_weights.get(hedge_ticker, 0.50),
+            max_weight=self.individual_max_hedge_weight,
             weight_step=self.config['optimization']['weight_step'],
             alpha=self.config['metrics']['cvar_confidence'],
             tie_break_tolerance=self.config['optimization'].get('tie_break_tolerance', 0.001)
@@ -417,7 +421,7 @@ class Backtester:
                 self.returns[ticker],
                 self.regime_labels,
                 self.config['optimization']['targets'],
-                self.hedge_weights.get(ticker, 0.50),
+                self.individual_max_hedge_weight,  # Uniform constraint for individual analysis
                 self.config['optimization']['weight_step'],
                 self.config['metrics']['cvar_confidence'],
                 self.config['hypothesis']['n_bootstrap'],
