@@ -106,6 +106,46 @@ def rolling_correlation(
     return aligned['equity'].rolling(window).corr(aligned['hedge'])
 
 
+def rolling_correlation_stats(
+    equity_ret: pd.Series,
+    hedge_ret: pd.Series,
+    window: int = 63
+) -> dict:
+    """
+    Calculate summary statistics for rolling correlation.
+    
+    Provides mean, min, max, and standard deviation of rolling correlation
+    to understand how correlation evolves over time.
+    
+    Args:
+        equity_ret: Equity return series
+        hedge_ret: Hedge asset return series
+        window: Rolling window size (e.g., 63 for ~3 months)
+        
+    Returns:
+        Dictionary with rolling_mean, rolling_min, rolling_max, rolling_std
+    """
+    rolling_corr = rolling_correlation(equity_ret, hedge_ret, window)
+    
+    # Remove NaN values from rolling window calculation
+    rolling_corr_clean = rolling_corr.dropna()
+    
+    if len(rolling_corr_clean) == 0:
+        return {
+            'rolling_mean': np.nan,
+            'rolling_min': np.nan,
+            'rolling_max': np.nan,
+            'rolling_std': np.nan
+        }
+    
+    return {
+        'rolling_mean': rolling_corr_clean.mean(),
+        'rolling_min': rolling_corr_clean.min(),
+        'rolling_max': rolling_corr_clean.max(),
+        'rolling_std': rolling_corr_clean.std()
+    }
+
+
 def quantile_correlation(
     equity_ret: pd.Series,
     hedge_ret: pd.Series,
@@ -334,7 +374,8 @@ def beta(equity_ret: pd.Series, hedge_ret: pd.Series) -> float:
 def correlation_breakdown(
     equity_ret: pd.Series,
     hedge_ret: pd.Series,
-    regime_labels: Optional[pd.Series] = None
+    regime_labels: Optional[pd.Series] = None,
+    rolling_window: int = 63
 ) -> dict:
     """
     Comprehensive correlation analysis.
@@ -343,9 +384,10 @@ def correlation_breakdown(
         equity_ret: Equity return series
         hedge_ret: Hedge return series
         regime_labels: Optional regime labels
+        rolling_window: Window size for rolling correlation stats (default 63 days)
         
     Returns:
-        Dictionary with all correlation metrics
+        Dictionary with all correlation metrics including rolling statistics
     """
     result = {
         'pearson_full': equity_ret.corr(hedge_ret),
@@ -359,6 +401,10 @@ def correlation_breakdown(
             equity_ret.values, hedge_ret.values
         )
     }
+    
+    # Add rolling correlation statistics
+    rolling_stats = rolling_correlation_stats(equity_ret, hedge_ret, rolling_window)
+    result.update(rolling_stats)
     
     if regime_labels is not None:
         result['correlation_normal'] = conditional_correlation(

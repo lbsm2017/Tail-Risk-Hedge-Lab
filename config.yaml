@@ -31,10 +31,6 @@ assets:
       name: "Bitcoin"
       min_weight: 0.00
       max_weight: 0.15
-    - ticker: "ETH-USD"
-      name: "Ethereum"
-      min_weight: 0.00
-      max_weight: 0.10
     - ticker: "DBMF"
       name: "Managed Futures (Trend Following)"
       min_weight: 0.00

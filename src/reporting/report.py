@@ -456,6 +456,7 @@ def get_styles() -> str:
         
         .positive { color: var(--positive); }
         .negative { color: var(--negative); }
+        .warning { color: #ff9800; font-weight: 500; }
         
         /* Summary boxes */
         .summary-box {
@@ -709,10 +710,13 @@ def generate_html_report(
             <table class="comparison-table">
                 <tr>
                     <th>Asset</th>
-                    <th>Crisis Corr.</th>
-                    <th>Max Weight</th>
-                    <th>Max CVaR Reduction</th>
-                    <th>Max MDD Reduction</th>
+                    <th>Avg Corr</th>
+                    <th>Crisis Corr</th>
+                    <th>Min Corr</th>
+                    <th>Max Corr</th>
+                    <th>Corr StDev</th>
+                    <th>Max CVaR Red.</th>
+                    <th>Max MDD Red.</th>
                 </tr>
 """
     
@@ -720,40 +724,50 @@ def generate_html_report(
     for ticker, hedge_data in individual_hedges.items():
         asset_name = get_asset_name(ticker, hedge_names)
         corr = hedge_data.get('correlations', {})
+        
+        # Extract correlation metrics
         crisis_corr = corr.get('correlation_crisis', corr.get('pearson_full', 0))
+        avg_corr = corr.get('rolling_mean', corr.get('pearson_full', 0))
+        min_corr = corr.get('rolling_min', 0)
+        max_corr = corr.get('rolling_max', 0)
+        corr_std = corr.get('rolling_std', 0)
         
-        # Get max weight from config
-        max_weight = 0.50
-        for h in config.get('assets', {}).get('hedges', []):
-            if h.get('ticker') == ticker:
-                max_weight = h.get('max_weight', 0.50)
-                break
-        
-        # Find max achieved reductions
+        # Find max achieved reductions from optimization results
+        # Use the highest achieved reduction across all targets for each metric
         max_cvar_reduction = 0
         max_mdd_reduction = 0
         if hedge_data.get('optimization'):
             for opt in hedge_data['optimization']:
                 metric = opt.get('metric', '')
                 achieved = opt.get('achieved_reduction', 0)
+                # Take the maximum achieved reduction (regardless of feasibility)
+                # This represents the best reduction possible with the given constraints
                 if metric == 'cvar' and achieved > max_cvar_reduction:
                     max_cvar_reduction = achieved
                 elif metric == 'mdd' and achieved > max_mdd_reduction:
                     max_mdd_reduction = achieved
         
+        # Determine CSS classes for correlation coloring
+        avg_class = 'negative' if avg_corr < 0 else ''
+        crisis_class = 'negative' if crisis_corr < 0 else ''
+        std_class = 'warning' if corr_std > 0.30 else ''  # High volatility warning
+        
         html += f"""
                 <tr>
                     <td>{asset_name}</td>
-                    <td class="text-right {'negative' if crisis_corr < 0 else ''}">{format_num(crisis_corr)}</td>
-                    <td class="text-right">{format_pct(max_weight * 100)}</td>
-                    <td class="text-right {'positive' if max_cvar_reduction > 0 else ''}">{format_pct(max_cvar_reduction)}</td>
-                    <td class="text-right {'positive' if max_mdd_reduction > 0 else ''}">{format_pct(max_mdd_reduction)}</td>
+                    <td class="text-right {avg_class}">{format_num(avg_corr)}</td>
+                    <td class="text-right {crisis_class}">{format_num(crisis_corr)}</td>
+                    <td class="text-right">{format_num(min_corr)}</td>
+                    <td class="text-right">{format_num(max_corr)}</td>
+                    <td class="text-right {std_class}">{format_num(corr_std)}</td>
+                    <td class="text-right {'positive' if max_cvar_reduction > 0 else ''}">{format_pct(max_cvar_reduction * 100)}</td>
+                    <td class="text-right {'positive' if max_mdd_reduction > 0 else ''}">{format_pct(max_mdd_reduction * 100)}</td>
                 </tr>
 """
     
     html += """
             </table>
-            <p class="footnote">Max reductions show the best achievable risk reduction within the weight constraint for each asset.</p>
+            <p class="footnote">Correlations show time-varying relationships: negative values (green) indicate inverse movement with equities, high StDev (orange) indicates unstable hedging behavior. Max reductions show the best achievable risk reduction within weight constraints.</p>
 """
     
     # Detailed breakdown per asset
