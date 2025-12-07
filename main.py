@@ -27,9 +27,12 @@ def main():
     returns = results.pop('returns', None)
     regime_labels = results.pop('regime_labels', None)
     
-    # Generate timestamped filename
+    # Get base ticker for filename
+    base_ticker = results.get('config', {}).get('assets', {}).get('base', 'ACWI').upper()
+    
+    # Generate timestamped filename with base ticker
     timestamp = datetime.now().strftime('%Y.%m.%d.%H.%M.%S')
-    output_file = f'output/tail_risk_analysis_{timestamp}.html'
+    output_file = f'output/tail_risk_analysis_({base_ticker})_{timestamp}.html'
     
     # Generate HTML report with embedded charts
     generate_html_report(
