@@ -12,55 +12,80 @@ from typing import Tuple, Optional, Union
 from datetime import datetime
 
 
-def resample_to_monthly(returns: Union[pd.Series, np.ndarray]) -> pd.Series:
+def resample_returns(returns: Union[pd.Series, np.ndarray], frequency: str = 'monthly') -> pd.Series:
     """
-    Resample daily log returns to monthly log returns.
+    Resample daily log returns to specified frequency.
     
-    For log returns, monthly returns are the sum of daily log returns.
+    For log returns, aggregated returns are the sum of daily log returns.
     This preserves the mathematical properties of log returns.
     
     Args:
-        returns: Daily log returns (Series with DatetimeIndex or array)
+        returns: Daily log returns (Series with DatetimeIndex)
+        frequency: Target frequency - 'daily', 'weekly', or 'monthly'
         
     Returns:
-        Monthly log returns as pandas Series
+        Resampled log returns as pandas Series
     """
     if isinstance(returns, np.ndarray):
         raise ValueError("Array input not supported for resampling. Use pandas Series with DatetimeIndex.")
     
     if not isinstance(returns.index, pd.DatetimeIndex):
-        raise ValueError("Returns must have a DatetimeIndex for monthly resampling.")
+        raise ValueError("Returns must have a DatetimeIndex for resampling.")
     
-    # Sum log returns within each month (log returns are additive)
-    monthly_returns = returns.resample('M').sum()
+    frequency = frequency.lower()
     
-    return monthly_returns
+    if frequency == 'daily':
+        # No resampling needed
+        return returns
+    elif frequency == 'weekly':
+        # Sum log returns within each week (Friday close)
+        return returns.resample('W-FRI').sum()
+    elif frequency == 'monthly':
+        # Sum log returns within each month
+        return returns.resample('M').sum()
+    else:
+        raise ValueError(f"Invalid frequency '{frequency}'. Must be 'daily', 'weekly', or 'monthly'.")
 
 
-def cvar(returns: Union[pd.Series, np.ndarray], alpha: float = 0.95, monthly: bool = True) -> float:
+def resample_to_monthly(returns: Union[pd.Series, np.ndarray]) -> pd.Series:
+    """
+    Backwards compatibility wrapper for resample_returns with monthly frequency.
+    
+    Args:
+        returns: Daily log returns (Series with DatetimeIndex)
+        
+    Returns:
+        Monthly log returns as pandas Series
+    """
+    return resample_returns(returns, frequency='monthly')
+
+
+def cvar(returns: Union[pd.Series, np.ndarray], alpha: float = 0.95, 
+         frequency: str = 'monthly') -> float:
     """
     Calculate Conditional Value at Risk (CVaR) / Expected Shortfall.
     
     CVaR is the expected loss given that the loss exceeds VaR.
     
     Args:
-        returns: Array or Series of returns (log returns if using monthly resampling)
+        returns: Array or Series of returns (log returns if resampling from daily)
         alpha: Confidence level (e.g., 0.95 for 95%)
-        monthly: If True, resample daily returns to monthly before computing CVaR (default: True)
+        frequency: Return frequency for CVaR calculation - 'daily', 'weekly', or 'monthly'
+                  If not 'daily', resamples daily returns before computing CVaR
         
     Returns:
         CVaR value (positive number representing expected loss)
     """
-    # Handle monthly resampling for pandas Series
-    if monthly:
+    # Handle resampling for pandas Series (if frequency is not daily)
+    if frequency and frequency.lower() != 'daily':
         if isinstance(returns, pd.Series):
             if isinstance(returns.index, pd.DatetimeIndex):
-                returns = resample_to_monthly(returns)
+                returns = resample_returns(returns, frequency=frequency)
                 returns = returns.values  # Convert to array for calculation
             else:
-                raise ValueError("Monthly CVaR requires DatetimeIndex. Pass monthly=False for array input.")
+                raise ValueError(f"CVaR with frequency '{frequency}' requires DatetimeIndex. Use frequency='daily' for array input.")
         else:
-            raise ValueError("Monthly CVaR requires pandas Series with DatetimeIndex. Pass monthly=False for array input.")
+            raise ValueError(f"CVaR with frequency '{frequency}' requires pandas Series with DatetimeIndex. Use frequency='daily' for array input.")
     
     # Convert to numpy array if needed
     if isinstance(returns, pd.Series):
@@ -436,8 +461,8 @@ def recovery_time(prices: pd.Series) -> pd.Series:
     return days_since_peak
 
 
-def compute_all_metrics(returns: pd.Series, prices: Optional[pd.Series] = None, 
-                        rf_rate: float = 0.0) -> dict:
+def compute_all_metrics(returns: pd.Series, prices: Optional[pd.Series] = None,
+                        rf_rate: float = 0.0, cvar_frequency: str = 'monthly') -> dict:
     """
     Compute all tail-risk and performance metrics.
     
@@ -457,9 +482,9 @@ def compute_all_metrics(returns: pd.Series, prices: Optional[pd.Series] = None,
         'sharpe': sharpe_ratio(ret_array, rf_rate),
         'sortino': sortino_ratio(ret_array),
         'var_95': var(ret_array, 0.95),
-        'cvar_95': cvar(returns, 0.95, monthly=True),  # Pass Series for monthly resampling
+        'cvar_95': cvar(returns, 0.95, frequency=cvar_frequency),  # Pass Series for resampling
         'var_99': var(ret_array, 0.99),
-        'cvar_99': cvar(returns, 0.99, monthly=True),  # Pass Series for monthly resampling
+        'cvar_99': cvar(returns, 0.99, frequency=cvar_frequency),  # Pass Series for resampling
         'downside_dev': downside_deviation(ret_array),
         'omega': omega_ratio(ret_array),
         'tail_ratio': tail_ratio(ret_array),

@@ -50,7 +50,7 @@ def _analyze_hedge_worker(args: Tuple) -> Tuple[str, Dict]:
     """
     (ticker, base_returns, hedge_returns, regime_labels, 
      targets, max_weight, weight_step, alpha, 
-     n_bootstrap, hypothesis_alpha, target_reduction, rf_rate) = args
+     n_bootstrap, hypothesis_alpha, target_reduction, rf_rate, cvar_frequency) = args
     
     # Align data - use all available overlapping periods
     aligned = pd.DataFrame({
@@ -89,7 +89,8 @@ def _analyze_hedge_worker(args: Tuple) -> Tuple[str, Dict]:
         metrics=['cvar', 'mdd'],
         max_weight=max_weight,
         weight_step=weight_step,
-        alpha=alpha
+        alpha=alpha,
+        cvar_frequency=cvar_frequency
     )
     
     # Hypothesis tests for primary target
@@ -107,7 +108,8 @@ def _analyze_hedge_worker(args: Tuple) -> Tuple[str, Dict]:
             hedge_weight=optimal_weight,
             regime_labels=aligned_regime,
             n_bootstrap=n_bootstrap,
-            alpha=hypothesis_alpha
+            alpha=hypothesis_alpha,
+            cvar_frequency=cvar_frequency
         )
     else:
         optimal_weight = 0.0
@@ -118,7 +120,8 @@ def _analyze_hedge_worker(args: Tuple) -> Tuple[str, Dict]:
         hedged_returns = (1 - optimal_weight) * aligned_base + optimal_weight * aligned_hedge
         # Align risk-free rate to hedged returns
         aligned_rf = rf_rate.reindex(hedged_returns.index, method='ffill').mean()
-        hedged_metrics = compute_all_metrics(hedged_returns, rf_rate=aligned_rf)
+        hedged_metrics = compute_all_metrics(hedged_returns, rf_rate=aligned_rf, 
+                                             cvar_frequency=cvar_frequency)
     else:
         hedged_metrics = {}
     
@@ -416,7 +419,8 @@ class Backtester:
                 self.config['hypothesis']['n_bootstrap'],
                 self.config['hypothesis']['alpha'],
                 0.25,  # target_reduction for hypothesis tests
-                self.risk_free_rate  # risk-free rate series
+                self.risk_free_rate,  # risk-free rate series
+                self.config['metrics'].get('cvar_frequency', 'monthly')  # CVaR frequency
             )
             worker_args.append(args)
         
@@ -515,7 +519,8 @@ class Backtester:
                 max_total_weight=self.config['optimization']['max_total_hedge_weight'],
                 max_weights=max_weights,
                 weight_step=self.config['optimization']['weight_step'],
-                alpha=self.config['metrics']['cvar_confidence']
+                alpha=self.config['metrics']['cvar_confidence'],
+                cvar_frequency=self.config['metrics'].get('cvar_frequency', 'monthly')
             )
         elif method == 'cvar':
             weights = optimize_multi_asset_cvar(
@@ -524,7 +529,8 @@ class Backtester:
                 target_cvar_reduction=target_cvar_reduction,
                 max_total_weight=self.config['optimization']['max_total_hedge_weight'],
                 max_weights=max_weights,
-                alpha=self.config['metrics']['cvar_confidence']
+                alpha=self.config['metrics']['cvar_confidence'],
+                cvar_frequency=self.config['metrics'].get('cvar_frequency', 'monthly')
             )
         else:
             raise ValueError(f"Unknown method: {method}")
@@ -535,7 +541,8 @@ class Backtester:
             hedge_returns=hedge_returns,
             weights=weights,
             alpha=self.config['metrics']['cvar_confidence'],
-            rf_rate=self.mean_rf_rate
+            rf_rate=self.mean_rf_rate,
+            cvar_frequency=self.config['metrics'].get('cvar_frequency', 'monthly')
         )
         
         # Calculate regime-conditional performance

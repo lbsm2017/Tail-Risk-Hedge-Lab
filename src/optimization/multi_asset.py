@@ -18,7 +18,8 @@ def optimize_multi_asset_cvar(
     target_cvar_reduction: float = 0.25,
     max_total_weight: float = 0.50,
     max_weights: Optional[Dict[str, float]] = None,
-    alpha: float = 0.95
+    alpha: float = 0.95,
+    cvar_frequency: str = 'monthly'
 ) -> Dict[str, float]:
     """
     Find optimal weights for multiple hedge assets to minimize CVaR.
@@ -41,8 +42,8 @@ def optimize_multi_asset_cvar(
     
     n_assets = len(hedge_aligned.columns)
     
-    # Calculate baseline CVaR (monthly)
-    baseline_cvar = cvar(base_aligned, alpha=alpha, monthly=True)
+    # Calculate baseline CVaR
+    baseline_cvar = cvar(base_aligned, alpha=alpha, frequency=cvar_frequency)
     target_cvar = baseline_cvar * (1 - target_cvar_reduction)
     
     # Define objective: minimize CVaR
@@ -55,7 +56,7 @@ def optimize_multi_asset_cvar(
         for i, asset in enumerate(hedge_aligned.columns):
             portfolio_returns += weights[i] * hedge_aligned[asset]
         
-        return cvar(portfolio_returns, alpha=alpha, monthly=True)
+        return cvar(portfolio_returns, alpha=alpha, frequency=cvar_frequency)
     
     # Define constraint: target CVaR reduction
     def cvar_constraint(weights):
@@ -183,7 +184,8 @@ def greedy_sequential_allocation(
     max_total_weight: float = 0.50,
     max_weights: Optional[Dict[str, float]] = None,
     weight_step: float = 0.01,
-    alpha: float = 0.95
+    alpha: float = 0.95,
+    cvar_frequency: str = 'monthly'
 ) -> Dict[str, float]:
     """
     Greedy algorithm: sequentially add hedge assets with best marginal improvement.
@@ -206,9 +208,9 @@ def greedy_sequential_allocation(
     base_aligned = all_data['base']
     hedge_aligned = all_data.drop('base', axis=1)
     
-    # Calculate baseline risk (monthly CVaR)
+    # Calculate baseline risk
     if metric == 'cvar':
-        baseline_risk = cvar(base_aligned, alpha=alpha, monthly=True)
+        baseline_risk = cvar(base_aligned, alpha=alpha, frequency=cvar_frequency)
     else:  # mdd
         baseline_risk, _, _ = max_drawdown((1 + base_aligned).cumprod())
     
@@ -243,9 +245,9 @@ def greedy_sequential_allocation(
                 for test_asset, w in test_weights.items():
                     test_portfolio += w * hedge_aligned[test_asset]
                 
-                # Calculate risk (monthly CVaR)
+                # Calculate risk
                 if metric == 'cvar':
-                    test_risk = cvar(test_portfolio, alpha=alpha, monthly=True)
+                    test_risk = cvar(test_portfolio, alpha=alpha, frequency=cvar_frequency)
                 else:
                     test_risk, _, _ = max_drawdown((1 + test_portfolio).cumprod())
                 
@@ -267,12 +269,13 @@ def greedy_sequential_allocation(
     return weights
 
 
-def portfolio_analytics(
+def build_portfolio_analytics(
     base_returns: pd.Series,
     hedge_returns: pd.DataFrame,
     weights: Dict[str, float],
     alpha: float = 0.95,
-    rf_rate: float = 0.0
+    rf_rate: float = 0.0,
+    cvar_frequency: str = 'monthly'
 ) -> Dict:
     """
     Calculate comprehensive analytics for multi-asset portfolio.
@@ -301,13 +304,13 @@ def portfolio_analytics(
         if w > 0 and asset in hedge_aligned.columns:
             portfolio_returns += w * hedge_aligned[asset]
     
-    # Calculate metrics (monthly CVaR)
-    portfolio_cvar = cvar(portfolio_returns, alpha=alpha, monthly=True)
+    # Calculate metrics
+    portfolio_cvar = cvar(portfolio_returns, alpha=alpha, frequency=cvar_frequency)
     portfolio_mdd, peak, trough = max_drawdown((1 + portfolio_returns).cumprod())
     portfolio_sharpe = sharpe_ratio(portfolio_returns, rf_rate=rf_rate)
     
-    # Baseline metrics (monthly CVaR)
-    baseline_cvar = cvar(base_aligned, alpha=alpha, monthly=True)
+    # Baseline metrics
+    baseline_cvar = cvar(base_aligned, alpha=alpha, frequency=cvar_frequency)
     baseline_mdd, _, _ = max_drawdown((1 + base_aligned).cumprod())
     baseline_sharpe = sharpe_ratio(base_aligned, rf_rate=rf_rate)
     
@@ -417,3 +420,7 @@ def equal_risk_contribution(
                        for asset, inv_vol in inv_vols.items()}
     
     return weights_dict
+
+
+# Alias for backwards compatibility
+portfolio_analytics = build_portfolio_analytics

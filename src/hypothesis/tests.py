@@ -19,7 +19,8 @@ def bootstrap_cvar_test(
     hedge_weight: float,
     n_bootstrap: int = 5000,  # Reduced for speed, still statistically valid
     alpha: float = 0.05,
-    confidence_level: float = 0.95
+    confidence_level: float = 0.95,
+    cvar_frequency: str = 'monthly'
 ) -> Dict:
     """
     Bootstrap test for CVaR reduction significance using monthly CVaR.
@@ -51,12 +52,12 @@ def bootstrap_cvar_test(
     portfolio_returns = (1 - hedge_weight) * aligned['base'] + hedge_weight * aligned['hedge']
     portfolio_returns.index = aligned.index  # Preserve DatetimeIndex
     
-    # Calculate actual CVaR reduction using monthly resampling
-    base_cvar = cvar(aligned['base'], alpha=confidence_level, monthly=True)
-    portfolio_cvar = cvar(portfolio_returns, alpha=confidence_level, monthly=True)
+    # Calculate actual CVaR reduction
+    base_cvar = cvar(aligned['base'], alpha=confidence_level, frequency=cvar_frequency)
+    portfolio_cvar = cvar(portfolio_returns, alpha=confidence_level, frequency=cvar_frequency)
     actual_reduction = base_cvar - portfolio_cvar
     
-    # Bootstrap: resample days with replacement, then compute monthly CVaR
+    # Bootstrap: resample days with replacement, then compute CVaR
     np.random.seed(42)
     bootstrap_reductions = []
     
@@ -66,7 +67,7 @@ def bootstrap_cvar_test(
         boot_base = aligned['base'].iloc[boot_indices]
         boot_hedge = aligned['hedge'].iloc[boot_indices]
         
-        # Preserve dates for resampling (assign original dates to maintain monthly structure)
+        # Preserve dates for resampling (assign original dates to maintain structure)
         boot_base.index = aligned.index
         boot_hedge.index = aligned.index
         
@@ -74,8 +75,8 @@ def bootstrap_cvar_test(
         boot_portfolio = (1 - hedge_weight) * boot_base + hedge_weight * boot_hedge
         boot_portfolio.index = aligned.index
         
-        # Calculate CVaR with monthly resampling
-        boot_cvar = cvar(boot_portfolio, alpha=confidence_level, monthly=True)
+        # Calculate CVaR with specified frequency
+        boot_cvar = cvar(boot_portfolio, alpha=confidence_level, frequency=cvar_frequency)
         bootstrap_reductions.append(base_cvar - boot_cvar)
     
     bootstrap_reductions = np.array(bootstrap_reductions)
@@ -88,7 +89,7 @@ def bootstrap_cvar_test(
     ci_upper = np.percentile(bootstrap_reductions, 100 - alpha * 100 / 2)
     
     return {
-        'test': 'Bootstrap CVaR Reduction (Monthly)',
+        'test': f'Bootstrap CVaR Reduction ({cvar_frequency.title()})',
         'actual_reduction': actual_reduction,
         'p_value': p_value,
         'significant': p_value < alpha,
@@ -422,7 +423,8 @@ def comprehensive_hypothesis_tests(
     hedge_weight: float,
     regime_labels: Optional[pd.Series] = None,
     n_bootstrap: int = 10000,
-    alpha: float = 0.05
+    alpha: float = 0.05,
+    cvar_frequency: str = 'monthly'
 ) -> Dict[str, Dict]:
     """
     Run all hypothesis tests for hedge effectiveness.
@@ -442,7 +444,8 @@ def comprehensive_hypothesis_tests(
     
     # Bootstrap tests
     results['cvar_test'] = bootstrap_cvar_test(
-        base_returns, hedge_returns, hedge_weight, n_bootstrap, alpha
+        base_returns, hedge_returns, hedge_weight, n_bootstrap, alpha,
+        cvar_frequency=cvar_frequency
     )
     
     results['mdd_test'] = bootstrap_mdd_test(

@@ -1022,7 +1022,52 @@ def generate_html_report(
         </section>
 """
     
-    html += """
+    # Extract methodology details from config
+    cvar_frequency = config.get('metrics', {}).get('cvar_frequency', 'monthly').title()
+    cvar_conf_pct = config.get('metrics', {}).get('cvar_confidence', 0.95) * 100
+    rf_source = config.get('metrics', {}).get('risk_free_rate', {}).get('source', 'FRED')
+    rf_ticker = config.get('metrics', {}).get('risk_free_rate', {}).get('ticker', 'DGS3MO')
+    rf_static = config.get('metrics', {}).get('risk_free_rate', {}).get('static_value', 0.04)
+    
+    if rf_source == 'FRED':
+        rf_description = f"Federal Reserve Economic Data ({rf_ticker})"
+    elif rf_source == 'static':
+        rf_description = f"Static rate of {rf_static:.2%}"
+    else:
+        rf_description = rf_source
+    
+    html += f"""
+        <!-- Methodology Footnote -->
+        <section style="margin-top: 3rem; padding-top: 2rem; border-top: 2px solid var(--border);">
+            <h3 style="font-size: 14px; color: var(--text-light); margin-bottom: 1rem;">Methodology & Assumptions</h3>
+            <div style="font-size: 12px; color: var(--text-light); line-height: 1.8;">
+                <p style="margin: 0.5rem 0;"><strong>CVaR (Conditional Value at Risk):</strong> 
+                Computed on <strong>{cvar_frequency.lower()}</strong> log returns at {cvar_conf_pct:.0f}% confidence level. 
+                Daily returns are aggregated to {cvar_frequency.lower()} frequency by summing log returns within each period, 
+                preserving mathematical properties of compounding. CVaR represents the expected loss in the worst 
+                {100 - cvar_conf_pct:.0f}% of outcomes.</p>
+                
+                <p style="margin: 0.5rem 0;"><strong>CAGR (Compound Annual Growth Rate):</strong> 
+                Calculated using geometric compounding: CAGR = (1 + Total Return)<sup>(1/Years)</sup> - 1. 
+                This accounts for the multiplicative nature of returns over time, providing an accurate 
+                annualized growth rate. Based on daily log returns summed over the analysis period.</p>
+                
+                <p style="margin: 0.5rem 0;"><strong>Risk-Free Rate:</strong> 
+                Sourced from <strong>{rf_description}</strong>. 
+                Used for calculating excess returns in Sharpe ratios and risk-adjusted metrics. 
+                Time-series of daily rates aligned with return data and forward-filled for missing values.</p>
+                
+                <p style="margin: 0.5rem 0;"><strong>Return Calculation:</strong> 
+                All returns are calculated as logarithmic returns: ln(P<sub>t</sub>/P<sub>t-1</sub>). 
+                Log returns are additive across time and provide symmetrical up/down movements, 
+                making them suitable for statistical analysis and aggregation across different frequencies.</p>
+                
+                <p style="margin: 0.5rem 0; margin-top: 1rem; font-style: italic; font-size: 11px;">
+                For detailed methodology, see framework documentation. All metrics are consistent throughout the analysis.
+                </p>
+            </div>
+        </section>
+        
         <footer>
             <div>Tail-Risk Hedge Analysis Framework</div>
             <div class="disclaimer">

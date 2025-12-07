@@ -45,7 +45,7 @@ regime:
 
 metrics:
   cvar_confidence: 0.95
-  cvar_frequency: "monthly"  # CVaR computed on monthly returns (resampled from daily)
+  cvar_frequency: "monthly"  # Options: "daily", "weekly", "monthly" - CVaR return frequency
   mar: 0.0  # Minimum acceptable return
   risk_free_rate:
     source: "FRED"       # "FRED" to download from FRED, "static" for fixed value
