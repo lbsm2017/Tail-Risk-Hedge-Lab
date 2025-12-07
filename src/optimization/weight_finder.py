@@ -228,7 +228,7 @@ def find_weights_for_all_targets(
 ) -> pd.DataFrame:
     """
     Find optimal weights for multiple target reductions.
-    Parallelized for performance.
+    Parallelized for performance. Includes efficiency metric calculation.
     
     Args:
         base_returns: Base portfolio returns
@@ -242,7 +242,8 @@ def find_weights_for_all_targets(
         tolerance: Acceptable deviation from target
         
     Returns:
-        DataFrame with results for each (target, metric) combination
+        DataFrame with results for each (target, metric) combination.
+        Includes 'efficiency' column: risk reduction per unit weight.
     """
     def optimize_single(args):
         metric, target = args
@@ -269,7 +270,19 @@ def find_weights_for_all_targets(
         for future in futures:
             results.append(future.result())
     
-    return pd.DataFrame(results)
+    # Convert to DataFrame and add efficiency metric
+    df = pd.DataFrame(results)
+    
+    # Efficiency = risk reduction per unit weight
+    # Higher efficiency = more risk reduction per 1% allocation
+    # Zero efficiency when no weight allocated OR no reduction achieved
+    df['efficiency'] = df.apply(
+        lambda row: row['achieved_reduction'] / row['optimal_weight'] 
+        if row['optimal_weight'] > 0 and row['achieved_reduction'] > 0 else 0.0,
+        axis=1
+    )
+    
+    return df
 
 
 # Backwards compatibility alias

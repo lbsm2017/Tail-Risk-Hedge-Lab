@@ -629,6 +629,36 @@ class Backtester:
             else:
                 max_weights[ticker] = self.hedge_weights[ticker]
         
+        # Extract efficiency scores from individual hedge analysis
+        hedge_efficiency = {}
+        if hasattr(self, 'individual_hedges') and self.individual_hedges:
+            for ticker in hedge_tickers:
+                if ticker in self.individual_hedges:
+                    hedge_data = self.individual_hedges[ticker]
+                    opt_results = hedge_data.get('optimization', [])
+                    
+                    # Calculate average efficiency across CVaR targets
+                    # Focus on primary target (25% reduction) if available
+                    cvar_results = [r for r in opt_results if r.get('metric') == 'cvar']
+                    
+                    if cvar_results:
+                        # Use primary target (25%) if available, otherwise average
+                        primary_result = next(
+                            (r for r in cvar_results if abs(r.get('target_reduction', 0) - 0.25) < 0.01),
+                            None
+                        )
+                        
+                        if primary_result and 'efficiency' in primary_result:
+                            hedge_efficiency[ticker] = primary_result['efficiency']
+                        else:
+                            # Average efficiency across all CVaR targets
+                            efficiencies = [r.get('efficiency', 0) for r in cvar_results if 'efficiency' in r]
+                            if efficiencies:
+                                hedge_efficiency[ticker] = sum(efficiencies) / len(efficiencies)
+        
+        # Get tie-breaking method from config
+        tie_break_method = self.config.get('optimization', {}).get('tie_break_method', 'efficiency')
+        
         # Optimize
         if method == 'greedy':
             weights = greedy_sequential_allocation(
@@ -641,7 +671,9 @@ class Backtester:
                 weight_step=self.config['optimization']['weight_step'],
                 alpha=self.config['metrics']['cvar_confidence'],
                 cvar_frequency=self.config['metrics'].get('cvar_frequency', 'monthly'),
-                tie_break_tolerance=self.config['optimization'].get('tie_break_tolerance', 0.001)
+                tie_break_tolerance=self.config['optimization'].get('tie_break_tolerance', 0.001),
+                hedge_efficiency=hedge_efficiency,
+                tie_break_method=tie_break_method
             )
         elif method == 'cvar':
             weights = optimize_multi_asset_cvar(
@@ -861,6 +893,7 @@ class Backtester:
             # Step 3: Analyze individual hedges (has its own progress bar)
             pipeline_pbar.set_postfix_str("Analyzing hedges...")
             individual_results = self.analyze_all_hedges()
+            self.individual_hedges = individual_results  # Store for multi-asset optimization
             pipeline_pbar.update(1)
             
             # Step 4: Build optimal portfolios (has its own progress bar)
@@ -880,6 +913,7 @@ class Backtester:
             
             # Step 3: Analyze individual hedges (parallelized)
             individual_results = self.analyze_all_hedges()
+            self.individual_hedges = individual_results  # Store for multi-asset optimization
             
             # Step 4: Build optimal portfolios (parallelized)
             print("\n" + "=" * 60)

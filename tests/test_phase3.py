@@ -151,7 +151,7 @@ def test_optimization():
     print("Testing Optimization Module")
     print("=" * 60)
     
-    from src.optimization.weight_finder import find_weight_for_target, grid_search_weight
+    from src.optimization.weight_finder import find_weight_for_target_reduction
     from src.optimization.multi_asset import greedy_sequential_allocation
     
     # Create synthetic data
@@ -175,7 +175,7 @@ def test_optimization():
     )
     
     print("\n1. Single Asset Weight Finder...")
-    weight, reduction, value = find_weight_for_target(
+    result = find_weight_for_target_reduction(
         base_returns=base_returns,
         hedge_returns=hedge1,
         target_reduction=0.25,
@@ -183,19 +183,11 @@ def test_optimization():
         max_weight=0.50,
         weight_step=0.01
     )
-    print(f"   Optimal weight: {weight:.2%}")
-    print(f"   Achieved reduction: {reduction:.2%}")
+    print(f"   Optimal weight: {result['optimal_weight']:.2%}")
+    print(f"   Achieved reduction: {result['achieved_reduction']:.2%}")
     
-    print("\n2. Grid Search...")
-    grid_results = grid_search_weight(
-        base_returns=base_returns,
-        hedge_returns=hedge1,
-        metric='cvar',
-        max_weight=0.30,
-        weight_step=0.05
-    )
-    print(f"   Grid points: {len(grid_results)}")
-    print(f"   Max reduction: {grid_results['reduction_pct'].max():.1f}%")
+    print("\n2. Grid Search (Skipped - function removed)...")
+    print("   Using find_weight_for_target_reduction instead")
     
     print("\n3. Multi-Asset Greedy Allocation...")
     hedge_returns = pd.DataFrame({

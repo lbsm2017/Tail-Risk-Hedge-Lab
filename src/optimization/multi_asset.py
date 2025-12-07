@@ -186,10 +186,19 @@ def greedy_sequential_allocation(
     weight_step: float = 0.01,
     alpha: float = 0.95,
     cvar_frequency: str = 'monthly',
-    tie_break_tolerance: float = 0.001
+    tie_break_tolerance: float = 0.001,
+    hedge_efficiency: Optional[Dict[str, float]] = None,
+    tie_break_method: str = 'efficiency'
 ) -> Dict[str, float]:
     """
     Greedy algorithm: sequentially add hedge assets with best marginal improvement.
+    
+    Tie-breaking priority:
+    1. Lowest risk (primary selection)
+    2. If multiple within tie_break_tolerance:
+       - 'efficiency': Highest risk reduction per weight unit (from individual analysis)
+       - 'cagr': Highest portfolio CAGR
+       - 'crisis_correlation': Most negative crisis correlation
     
     Args:
         base_returns: Base portfolio returns
@@ -200,7 +209,10 @@ def greedy_sequential_allocation(
         max_weights: Dict of max weight per asset
         weight_step: Weight increment for search
         alpha: Confidence level for CVaR
-        tie_break_tolerance: Risk difference threshold for CAGR tie-breaking
+        cvar_frequency: CVaR frequency ('daily', 'weekly', 'monthly')
+        tie_break_tolerance: Risk difference threshold for tie-breaking
+        hedge_efficiency: Dict mapping ticker to efficiency score (risk reduction per weight)
+        tie_break_method: 'efficiency', 'cagr', or 'crisis_correlation'
         
     Returns:
         Dictionary with optimal weights
@@ -266,19 +278,34 @@ def greedy_sequential_allocation(
                 if test_risk < best_new_risk:
                     best_new_risk = test_risk
         
-        # Select best asset: if multiple have similar risk, choose highest CAGR
+        # Select best asset using tie-breaking logic
         if candidates:
             # Filter candidates within tie_break_tolerance of best risk
             top_candidates = [c for c in candidates if abs(c['risk'] - best_new_risk) <= tie_break_tolerance]
             
             if len(top_candidates) > 1:
-                # Multiple assets with similar risk - use CAGR tie-breaking
-                best_cagr = -np.inf
-                for candidate in top_candidates:
-                    portfolio_cagr = cagr(candidate['portfolio'].values, periods_per_year=252)
-                    if portfolio_cagr > best_cagr:
-                        best_cagr = portfolio_cagr
-                        best_asset = candidate['asset']
+                # Multiple assets with similar risk - use configured tie-breaking method
+                if tie_break_method == 'efficiency' and hedge_efficiency:
+                    # Prefer assets with higher efficiency (risk reduction per weight unit)
+                    best_efficiency = -np.inf
+                    for candidate in top_candidates:
+                        eff = hedge_efficiency.get(candidate['asset'], 0.0)
+                        if eff > best_efficiency:
+                            best_efficiency = eff
+                            best_asset = candidate['asset']
+                    
+                    # If all have same efficiency (or efficiency not available), fall back to CAGR
+                    if best_asset is None or best_efficiency == 0.0:
+                        tie_break_method = 'cagr'  # Fallback
+                
+                if tie_break_method == 'cagr' or best_asset is None:
+                    # Use CAGR tie-breaking (original logic)
+                    best_cagr = -np.inf
+                    for candidate in top_candidates:
+                        portfolio_cagr = cagr(candidate['portfolio'].values, periods_per_year=252)
+                        if portfolio_cagr > best_cagr:
+                            best_cagr = portfolio_cagr
+                            best_asset = candidate['asset']
             elif len(top_candidates) == 1:
                 best_asset = top_candidates[0]['asset']
             

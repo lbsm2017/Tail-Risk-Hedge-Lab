@@ -71,12 +71,13 @@ optimization:
   targets: [0.10, 0.25, 0.50]  # Find weights to achieve 10%, 25%, 50% reduction
   weight_step: 0.01
   tolerance: 0.005  # Accept solution within X% of target
-  tie_break_tolerance: 0.001  # Risk difference threshold (0.1%) for CAGR tie-breaking
+  tie_break_tolerance: 0.001  # Risk difference threshold (0.1%) for tie-breaking
+  tie_break_method: "efficiency"  # Options: 'efficiency', 'cagr', 'crisis_correlation'
   max_total_hedge_weight: 0.67  # Max combined hedge allocation (1 - base_min_weight_multi)
 
 hypothesis:
   alpha: 0.05
-  n_bootstrap: 2500 # Number of bootstrap samples - can be increased to 10,000+ with vectorized CVaR
+  n_bootstrap: 5000 # Number of bootstrap samples - can be increased to 10,000+ with vectorized CVaR
   bootstrap_parallel: true        # Enable parallel bootstrap processing (with joblib)
   bootstrap_chunk_size: 1000      # Samples per parallel chunk
   bootstrap_n_jobs: -1            # Number of parallel jobs (-1 = all CPUs)
