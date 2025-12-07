@@ -328,7 +328,7 @@ class DataDownloader:
         print(f"  Date range: {self.start_date} to {self.end_date}")
         
         try:
-            # Download from FRED
+            # Download from FRED (uses config start_date)
             rf_data = pdr.DataReader(ticker, 'fred', self.start_date, self.end_date)
             
             # Convert to Series and clean
@@ -342,6 +342,23 @@ class DataDownloader:
             
             # Convert from percentage to decimal (FRED returns percentages like 4.5)
             rf_rate = rf_rate / 100.0
+            
+            # Check if we have data from requested start_date
+            actual_start = rf_rate.first_valid_index()
+            requested_start = pd.to_datetime(self.start_date)
+            
+            if actual_start and actual_start > requested_start:
+                # FRED data doesn't go back far enough - backfill with earliest available rate
+                days_missing = (actual_start - requested_start).days
+                print(f"  Warning: FRED data starts at {actual_start.date()}, requested {requested_start.date()}")
+                print(f"  Backfilling {days_missing} days with earliest rate: {rf_rate.loc[actual_start]:.2%}")
+                
+                # Create date range from requested start to first valid FRED date
+                backfill_dates = pd.date_range(start=requested_start, end=actual_start, freq='D', inclusive='left')
+                backfill_values = pd.Series(rf_rate.loc[actual_start], index=backfill_dates)
+                
+                # Prepend backfilled data
+                rf_rate = pd.concat([backfill_values, rf_rate])
             
             # Handle missing data with linear interpolation
             missing_before = rf_rate.isnull().sum()

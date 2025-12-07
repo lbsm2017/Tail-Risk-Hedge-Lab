@@ -36,7 +36,7 @@ tests:
 	python tests/all_tests.py
 
 # Clean up cached files and test outputs
-# Removes Python cache files, test reports, and temporary artifacts
+# Removes Python cache files, cached prices, risk-free rate data, test reports, and temporary artifacts
 clean:
 	@echo Cleaning up cached files...
 	@if exist tests\__pycache__ rmdir /s /q tests\__pycache__
@@ -48,5 +48,8 @@ clean:
 	@if exist src\optimization\__pycache__ rmdir /s /q src\optimization\__pycache__
 	@if exist src\regime\__pycache__ rmdir /s /q src\regime\__pycache__
 	@if exist src\reporting\__pycache__ rmdir /s /q src\reporting\__pycache__
+	@if exist data\prices.parquet del /q data\prices.parquet
+	@if exist data\prices_metadata.csv del /q data\prices_metadata.csv
+	@if exist data\risk_free_rate.parquet del /q data\risk_free_rate.parquet
 	@if exist output\test_report.html del /q output\test_report.html
 	@echo Clean complete!
