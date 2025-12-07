@@ -7,8 +7,6 @@
 
 Tail-Risk Hedge Lab answers: *"Which assets truly protect when stocks crash, and how much should you hold?"*
 
-![Sample Report](docs/sample_report.png)
-
 ---
 
 ## ✨ What It Does
@@ -119,6 +117,8 @@ The report includes:
 - **CVaR (Expected Shortfall)**: Average loss during the worst 5% of days
 - **Maximum Drawdown**: Largest peak-to-trough decline
 - **Sharpe Ratio**: Return per unit of risk (adjusted for US Treasury rates)
+
+![Sample Report](docs/sample_report.png)
 
 ---
 
