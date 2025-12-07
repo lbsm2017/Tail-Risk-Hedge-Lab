@@ -1,5 +1,5 @@
 data:
-  start_date: "2008-04-01"  # ACWI inception
+  start_date: "2000-01-01"  # ACWI inception
   end_date: null            # Latest available
   frequency: "D"            # Daily
   cache_path: "data/prices.parquet"
@@ -50,6 +50,11 @@ regime:
 metrics:
   cvar_confidence: 0.95
   mar: 0.0  # Minimum acceptable return
+  risk_free_rate:
+    source: "FRED"       # "FRED" to download from FRED, "static" for fixed value
+    ticker: "DGS3MO"     # FRED ticker: DGS3MO (3-month Treasury), DTB3, etc.
+    static_value: 0.04   # Fallback annual rate if FRED unavailable (e.g., 0.04 = 4%)
+    cache_path: "data/risk_free_rate.parquet"
 
 optimization:
   # Target risk reductions (output targets, not input)

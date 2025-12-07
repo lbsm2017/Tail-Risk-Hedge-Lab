@@ -653,6 +653,10 @@ def generate_html_report(
                     <span class="summary-value">{data_info.get('n_days', 0):,}</span>
                 </div>
                 <div class="summary-row">
+                    <span class="summary-label">Risk-Free Rate (Mean)</span>
+                    <span class="summary-value">{data_info.get('risk_free_rate', 0.0):.2%}</span>
+                </div>
+                <div class="summary-row">
                     <span class="summary-label">Base Portfolio</span>
                     <span class="summary-value">{base_name} ({base_ticker})</span>
                 </div>

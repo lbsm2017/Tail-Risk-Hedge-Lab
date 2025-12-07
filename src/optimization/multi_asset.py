@@ -271,7 +271,8 @@ def portfolio_analytics(
     base_returns: pd.Series,
     hedge_returns: pd.DataFrame,
     weights: Dict[str, float],
-    alpha: float = 0.95
+    alpha: float = 0.95,
+    rf_rate: float = 0.0
 ) -> Dict:
     """
     Calculate comprehensive analytics for multi-asset portfolio.
@@ -281,6 +282,7 @@ def portfolio_analytics(
         hedge_returns: DataFrame with hedge asset returns
         weights: Dictionary with hedge weights
         alpha: Confidence level for CVaR
+        rf_rate: Annualized risk-free rate
         
     Returns:
         Dictionary with portfolio metrics
@@ -302,12 +304,12 @@ def portfolio_analytics(
     # Calculate metrics
     portfolio_cvar = cvar(portfolio_returns, alpha=alpha)
     portfolio_mdd, peak, trough = max_drawdown((1 + portfolio_returns).cumprod())
-    portfolio_sharpe = sharpe_ratio(portfolio_returns)
+    portfolio_sharpe = sharpe_ratio(portfolio_returns, rf_rate=rf_rate)
     
     # Baseline metrics
     baseline_cvar = cvar(base_aligned, alpha=alpha)
     baseline_mdd, _, _ = max_drawdown((1 + base_aligned).cumprod())
-    baseline_sharpe = sharpe_ratio(base_aligned)
+    baseline_sharpe = sharpe_ratio(base_aligned, rf_rate=rf_rate)
     
     # Reductions
     cvar_reduction = (baseline_cvar - portfolio_cvar) / baseline_cvar * 100

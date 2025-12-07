@@ -15,6 +15,13 @@ from datetime import datetime
 import warnings
 warnings.filterwarnings('ignore')
 
+try:
+    import pandas_datareader as pdr
+    FRED_AVAILABLE = True
+except ImportError:
+    FRED_AVAILABLE = False
+    warnings.warn("pandas_datareader not available. FRED data download disabled.")
+
 
 class DataDownloader:
     """
@@ -277,6 +284,89 @@ class DataDownloader:
         self.returns = self.compute_returns(freq='D')
         
         return self.prices, self.returns
+    
+    def download_risk_free_rate(
+        self,
+        ticker: str = 'DGS3MO',
+        cache_path: str = 'data/risk_free_rate.parquet',
+        use_cache: bool = True
+    ) -> pd.Series:
+        """
+        Download US Treasury risk-free rate from FRED.
+        
+        Args:
+            ticker: FRED ticker symbol (default: DGS3MO = 3-month Treasury)
+            cache_path: Path to cache the risk-free rate data
+            use_cache: Whether to use cached data if available
+            
+        Returns:
+            Series of daily risk-free rates (annualized decimal, e.g., 0.04 = 4%)
+        """
+        cache_file = Path(cache_path)
+        
+        # Try to load from cache first
+        if use_cache and cache_file.exists():
+            try:
+                rf_rate = pd.read_parquet(cache_path)
+                if isinstance(rf_rate, pd.DataFrame):
+                    rf_rate = rf_rate.iloc[:, 0]  # Get first column as Series
+                print(f"Loaded risk-free rate from cache: {cache_path}")
+                print(f"  Range: {rf_rate.index[0].date()} to {rf_rate.index[-1].date()}")
+                print(f"  Mean rate: {rf_rate.mean():.2%}")
+                return rf_rate
+            except Exception as e:
+                print(f"Cache load failed, downloading: {e}")
+        
+        # Download from FRED
+        if not FRED_AVAILABLE:
+            raise ImportError(
+                "pandas_datareader is required for FRED data. "
+                "Install with: pip install pandas-datareader"
+            )
+        
+        print(f"Downloading risk-free rate ({ticker}) from FRED...")
+        print(f"  Date range: {self.start_date} to {self.end_date}")
+        
+        try:
+            # Download from FRED
+            rf_data = pdr.DataReader(ticker, 'fred', self.start_date, self.end_date)
+            
+            # Convert to Series and clean
+            if isinstance(rf_data, pd.DataFrame):
+                rf_rate = rf_data.iloc[:, 0]  # Get first column
+            else:
+                rf_rate = rf_data
+            
+            # Remove name if it exists
+            rf_rate.name = 'risk_free_rate'
+            
+            # Convert from percentage to decimal (FRED returns percentages like 4.5)
+            rf_rate = rf_rate / 100.0
+            
+            # Handle missing data with linear interpolation
+            missing_before = rf_rate.isnull().sum()
+            if missing_before > 0:
+                rf_rate = rf_rate.interpolate(method='linear', limit_direction='both')
+                missing_after = rf_rate.isnull().sum()
+                print(f"  Interpolated {missing_before - missing_after} missing values")
+            
+            # Still have NaN at edges? Forward/backward fill
+            if rf_rate.isnull().any():
+                rf_rate = rf_rate.fillna(method='ffill').fillna(method='bfill')
+            
+            print(f"  Downloaded {len(rf_rate)} observations")
+            print(f"  Mean rate: {rf_rate.mean():.2%}")
+            print(f"  Range: {rf_rate.min():.2%} to {rf_rate.max():.2%}")
+            
+            # Cache to disk
+            cache_file.parent.mkdir(parents=True, exist_ok=True)
+            rf_rate.to_frame().to_parquet(cache_path)
+            print(f"  Cached to {cache_path}")
+            
+            return rf_rate
+            
+        except Exception as e:
+            raise RuntimeError(f"Failed to download risk-free rate from FRED: {e}")
     
     def get_asset_info(self) -> pd.DataFrame:
         """
