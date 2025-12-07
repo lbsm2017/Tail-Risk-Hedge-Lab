@@ -11,6 +11,19 @@ import pandas as pd
 from typing import Tuple, Optional, Union
 from datetime import datetime
 
+# Optional numba import for JIT acceleration
+try:
+    from numba import jit, prange
+    NUMBA_AVAILABLE = True
+except ImportError:
+    NUMBA_AVAILABLE = False
+    # Fallback decorator that does nothing
+    def jit(*args, **kwargs):
+        def decorator(func):
+            return func
+        return decorator
+    prange = range
+
 
 def resample_returns(returns: Union[pd.Series, np.ndarray], frequency: str = 'monthly') -> pd.Series:
     """
@@ -104,6 +117,234 @@ def cvar(returns: Union[pd.Series, np.ndarray], alpha: float = 0.95,
         return np.nan
     
     return -tail_returns.mean()  # Return as positive value
+
+
+# =============================================================================
+# Vectorized Batch CVaR for Bootstrap Optimization
+# =============================================================================
+
+@jit(nopython=True, parallel=True, cache=True)
+def _cvar_batch_daily_numba(samples_2d: np.ndarray, alpha: float) -> np.ndarray:
+    """
+    Numba-accelerated batch CVaR computation for daily returns.
+    
+    Computes CVaR for each row (sample) in parallel.
+    
+    Args:
+        samples_2d: 2D array of shape (n_bootstrap, n_days)
+        alpha: Confidence level (e.g., 0.95)
+        
+    Returns:
+        1D array of CVaR values for each bootstrap sample
+    """
+    n_samples = samples_2d.shape[0]
+    n_days = samples_2d.shape[1]
+    cvar_values = np.empty(n_samples)
+    
+    # Percentile index for VaR
+    var_idx = int((1 - alpha) * n_days)
+    if var_idx < 1:
+        var_idx = 1
+    
+    for i in prange(n_samples):
+        # Sort returns for this sample
+        sorted_returns = np.sort(samples_2d[i, :])
+        
+        # VaR threshold
+        var_threshold = sorted_returns[var_idx]
+        
+        # Calculate mean of returns <= VaR (tail)
+        tail_sum = 0.0
+        tail_count = 0
+        for j in range(n_days):
+            if sorted_returns[j] <= var_threshold:
+                tail_sum += sorted_returns[j]
+                tail_count += 1
+        
+        if tail_count > 0:
+            cvar_values[i] = -tail_sum / tail_count
+        else:
+            cvar_values[i] = np.nan
+    
+    return cvar_values
+
+
+def _cvar_batch_daily_numpy(samples_2d: np.ndarray, alpha: float) -> np.ndarray:
+    """
+    Numpy fallback for batch CVaR computation (when Numba unavailable).
+    
+    Args:
+        samples_2d: 2D array of shape (n_bootstrap, n_days)
+        alpha: Confidence level
+        
+    Returns:
+        1D array of CVaR values
+    """
+    n_samples = samples_2d.shape[0]
+    cvar_values = np.empty(n_samples)
+    
+    var_percentile = (1 - alpha) * 100
+    
+    for i in range(n_samples):
+        returns = samples_2d[i, :]
+        var_threshold = np.percentile(returns, var_percentile)
+        tail_returns = returns[returns <= var_threshold]
+        if len(tail_returns) > 0:
+            cvar_values[i] = -tail_returns.mean()
+        else:
+            cvar_values[i] = np.nan
+    
+    return cvar_values
+
+
+@jit(nopython=True, parallel=True, cache=True)
+def _aggregate_to_monthly_numba(
+    samples_2d: np.ndarray, 
+    month_labels: np.ndarray,
+    n_months: int
+) -> np.ndarray:
+    """
+    Numba-accelerated aggregation of daily returns to monthly.
+    
+    For each bootstrap sample, sums daily log returns within each month.
+    
+    Args:
+        samples_2d: 2D array of shape (n_bootstrap, n_days)
+        month_labels: 1D array of month indices for each day (0, 1, 2, ...)
+        n_months: Total number of unique months
+        
+    Returns:
+        2D array of shape (n_bootstrap, n_months) with monthly returns
+    """
+    n_samples = samples_2d.shape[0]
+    n_days = samples_2d.shape[1]
+    
+    monthly_returns = np.zeros((n_samples, n_months))
+    
+    for i in prange(n_samples):
+        for j in range(n_days):
+            month_idx = month_labels[j]
+            monthly_returns[i, month_idx] += samples_2d[i, j]
+    
+    return monthly_returns
+
+
+def _aggregate_to_monthly_numpy(
+    samples_2d: np.ndarray, 
+    month_labels: np.ndarray,
+    n_months: int
+) -> np.ndarray:
+    """
+    Numpy fallback for monthly aggregation.
+    
+    Args:
+        samples_2d: 2D array of shape (n_bootstrap, n_days)
+        month_labels: 1D array of month indices for each day
+        n_months: Total number of unique months
+        
+    Returns:
+        2D array of shape (n_bootstrap, n_months)
+    """
+    n_samples = samples_2d.shape[0]
+    monthly_returns = np.zeros((n_samples, n_months))
+    
+    for month_idx in range(n_months):
+        mask = month_labels == month_idx
+        if mask.any():
+            monthly_returns[:, month_idx] = samples_2d[:, mask].sum(axis=1)
+    
+    return monthly_returns
+
+
+def compute_month_labels(dates: pd.DatetimeIndex) -> Tuple[np.ndarray, int]:
+    """
+    Pre-compute month labels for vectorized monthly aggregation.
+    
+    Args:
+        dates: DatetimeIndex of daily dates
+        
+    Returns:
+        Tuple of (month_labels array, n_unique_months)
+    """
+    # Create period labels (year-month)
+    periods = dates.to_period('M')
+    
+    # Map to sequential integer labels
+    unique_periods = periods.unique()
+    period_to_idx = {p: i for i, p in enumerate(unique_periods)}
+    month_labels = np.array([period_to_idx[p] for p in periods])
+    
+    return month_labels, len(unique_periods)
+
+
+def cvar_batch(
+    samples_2d: np.ndarray,
+    alpha: float = 0.95,
+    frequency: str = 'monthly',
+    month_labels: Optional[np.ndarray] = None,
+    n_months: Optional[int] = None
+) -> np.ndarray:
+    """
+    Vectorized batch CVaR computation for bootstrap samples.
+    
+    Computes CVaR for multiple bootstrap samples efficiently using
+    Numba JIT acceleration when available.
+    
+    Args:
+        samples_2d: 2D array of shape (n_bootstrap, n_days) containing 
+                   daily log returns for each bootstrap sample
+        alpha: CVaR confidence level (e.g., 0.95 for 95%)
+        frequency: 'daily' or 'monthly' - if monthly, aggregates first
+        month_labels: Pre-computed month labels from compute_month_labels()
+                     Required if frequency='monthly'
+        n_months: Number of unique months (from compute_month_labels())
+                 Required if frequency='monthly'
+        
+    Returns:
+        1D array of shape (n_bootstrap,) with CVaR for each sample
+        
+    Example:
+        >>> # Pre-compute month mapping once
+        >>> month_labels, n_months = compute_month_labels(returns.index)
+        >>> 
+        >>> # Generate bootstrap samples
+        >>> rng = np.random.default_rng(42)
+        >>> n_bootstrap, n_days = 10000, len(returns)
+        >>> indices = rng.integers(0, n_days, size=(n_bootstrap, n_days))
+        >>> samples = returns.values[indices]
+        >>> 
+        >>> # Batch CVaR computation
+        >>> cvar_values = cvar_batch(samples, alpha=0.95, frequency='monthly',
+        ...                          month_labels=month_labels, n_months=n_months)
+    """
+    if frequency.lower() == 'monthly':
+        if month_labels is None or n_months is None:
+            raise ValueError(
+                "month_labels and n_months required for monthly frequency. "
+                "Use compute_month_labels() to pre-compute them."
+            )
+        
+        # Aggregate daily to monthly returns
+        if NUMBA_AVAILABLE:
+            monthly_samples = _aggregate_to_monthly_numba(samples_2d, month_labels, n_months)
+        else:
+            monthly_samples = _aggregate_to_monthly_numpy(samples_2d, month_labels, n_months)
+        
+        # Compute CVaR on monthly returns
+        if NUMBA_AVAILABLE:
+            return _cvar_batch_daily_numba(monthly_samples, alpha)
+        else:
+            return _cvar_batch_daily_numpy(monthly_samples, alpha)
+    
+    elif frequency.lower() == 'daily':
+        # Direct CVaR on daily returns
+        if NUMBA_AVAILABLE:
+            return _cvar_batch_daily_numba(samples_2d, alpha)
+        else:
+            return _cvar_batch_daily_numpy(samples_2d, alpha)
+    
+    else:
+        raise ValueError(f"Unsupported frequency '{frequency}'. Use 'daily' or 'monthly'.")
 
 
 def var(returns: np.ndarray, alpha: float = 0.95) -> float:

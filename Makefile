@@ -53,6 +53,5 @@ clean:
 	@if exist data\prices.parquet del /q data\prices.parquet
 	@if exist data\prices_metadata.csv del /q data\prices_metadata.csv
 	@if exist data\risk_free_rate.parquet del /q data\risk_free_rate.parquet
-	@if exist output\test_report.html del /q output\test_report.html
 	@for %%f in (output\tail_risk_analysis_*.html) do @del /q "%%f"
 	@echo Clean complete!

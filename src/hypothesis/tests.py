@@ -17,7 +17,7 @@ def bootstrap_cvar_test(
     base_returns: pd.Series,
     hedge_returns: pd.Series,
     hedge_weight: float,
-    n_bootstrap: int = 5000,  # Reduced for speed, still statistically valid
+    n_bootstrap: int = 500,  # Default from config.yaml - can be increased with vectorized batch CVaR
     alpha: float = 0.05,
     confidence_level: float = 0.95,
     cvar_frequency: str = 'monthly'
@@ -105,7 +105,7 @@ def bootstrap_mdd_test(
     base_returns: pd.Series,
     hedge_returns: pd.Series,
     hedge_weight: float,
-    n_bootstrap: int = 2000,  # Reduced - MDD is more stable
+    n_bootstrap: int = 500,  # Default from config.yaml - MDD is more stable
     alpha: float = 0.05
 ) -> Dict:
     """
@@ -334,7 +334,7 @@ def tail_dependence_test(
     equity_returns: pd.Series,
     hedge_returns: pd.Series,
     quantile: float = 0.05,
-    n_bootstrap: int = 1000,
+    n_bootstrap: int = 500,  # Default from config.yaml
     alpha: float = 0.05
 ) -> Dict:
     """
@@ -422,7 +422,7 @@ def comprehensive_hypothesis_tests(
     hedge_returns: pd.Series,
     hedge_weight: float,
     regime_labels: Optional[pd.Series] = None,
-    n_bootstrap: int = 10000,
+    n_bootstrap: int = 500,  # Default from config.yaml - passed from backtester
     alpha: float = 0.05,
     cvar_frequency: str = 'monthly'
 ) -> Dict[str, Dict]:
@@ -462,9 +462,9 @@ def comprehensive_hypothesis_tests(
             base_returns, hedge_returns, regime_labels, alpha
         )
     
-    # Tail dependence
+    # Tail dependence (use same n_bootstrap for consistency)
     results['tail_dependence'] = tail_dependence_test(
-        base_returns, hedge_returns, n_bootstrap=min(1000, n_bootstrap), alpha=alpha
+        base_returns, hedge_returns, n_bootstrap=n_bootstrap, alpha=alpha
     )
     
     return results
@@ -474,7 +474,7 @@ def portfolio_performance_test(
     base_returns: pd.Series,
     hedged_returns: pd.Series,
     metric: str = 'sharpe',
-    n_bootstrap: int = 10000,
+    n_bootstrap: int = 500,  # Default from config.yaml
     alpha: float = 0.05
 ) -> Dict:
     """
