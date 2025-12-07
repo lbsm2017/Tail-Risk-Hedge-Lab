@@ -148,7 +148,7 @@ $$D_t = \frac{P_t - M_t}{M_t}, \quad M_t = \max_{s \leq t} P_s$$
 
 Rolling realized volatility compared to its historical distribution:
 
-$$\text{Crisis}_t = \mathbf{1}\left[\sigma_t > Q_{80\%}(\sigma)\right]$$
+$$\text{Crisis}_t = \mathbf{1}\left[\sigma_t > Q_{80\text{\%}}(\sigma)\right]$$
 
 Where $\sigma_t$ is rolling 63-day volatility.
 
@@ -178,7 +178,7 @@ $$\text{CVaR}_\alpha = -\mathbb{E}[R \mid R \leq \text{VaR}_\alpha]$$
 
 **Historical estimation (α = 0.95):**
 
-$$\text{CVaR}_{95} = -\frac{1}{|\{r_t : r_t \leq q_{5\%}\}|} \sum_{r_t \leq q_{5\%}} r_t$$
+$$\text{CVaR}_{95} = -\frac{1}{|\{r_t : r_t \leq q_{5\text{\%}}\}|} \sum_{r_t \leq q_{5\text{\%}}} r_t$$
 
 *Interpretation*: CVaR₉₅ = 5.2% means "When losses exceed the 95th percentile, the average loss is 5.2%"
 
