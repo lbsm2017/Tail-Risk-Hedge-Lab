@@ -500,6 +500,16 @@ def get_styles() -> str:
             margin-top: 8px;
         }
         
+        /* Info box for date ranges */
+        .info-box {
+            background-color: #f0f8ff;
+            border-left: 4px solid #2c5aa0;
+            padding: 12px 16px;
+            margin: 15px 0;
+            border-radius: 4px;
+            font-size: 10pt;
+        }
+        
         /* Asset cards */
         .asset-section {
             border: 1px solid var(--border);
@@ -855,8 +865,39 @@ def generate_html_report(
         baseline_cagr = portfolio.get('baseline_cagr', 0)
         portfolio_cagr = portfolio.get('portfolio_cagr', 0)
         
+        # Get portfolio metadata for date range display
+        portfolio_metadata = portfolio.get('portfolio_metadata', {})
+        portfolio_start = portfolio_metadata.get('portfolio_start_date')
+        portfolio_end = portfolio_metadata.get('portfolio_end_date')
+        asset_inceptions = portfolio_metadata.get('asset_inception_dates', {})
+        
+        # Format date range string
+        date_range_info = ""
+        if portfolio_start and portfolio_end:
+            date_range_info = f"""
+            <p class="info-box">
+                <strong>Analysis Period:</strong> {portfolio_start.strftime('%Y-%m-%d')} to {portfolio_end.strftime('%Y-%m-%d')} 
+                ({(portfolio_end - portfolio_start).days} days)
+            </p>
+"""
+            # Add asset inception details if available
+            if asset_inceptions:
+                inception_list = []
+                for ticker, date in sorted(asset_inceptions.items(), key=lambda x: x[1]):
+                    asset_display = get_asset_name(ticker, hedge_names)
+                    inception_list.append(f"{asset_display} ({ticker}): {date.strftime('%Y-%m-%d')}")
+                
+                if inception_list:
+                    date_range_info += f"""
+            <p class="footnote" style="margin-top: 10px; font-size: 0.9em; color: #666;">
+                <strong>Asset Availability:</strong><br>
+                {' | '.join(inception_list)}
+            </p>
+"""
+        
         html += f"""
             <h3>{target_label}</h3>
+            {date_range_info}
             
             <h4>Asset Allocation</h4>
             <table>

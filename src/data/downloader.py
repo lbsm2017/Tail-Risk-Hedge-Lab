@@ -49,6 +49,8 @@ class DataDownloader:
         self.cache_path = config.get('cache_path', 'data/prices.parquet')
         self.prices = None
         self.returns = None
+        # Track actual asset inception dates (before any filling/merging)
+        self.asset_inception_dates = {}
         
     def download_all(self, progress: bool = True) -> pd.DataFrame:
         """
@@ -204,6 +206,14 @@ class DataDownloader:
         returns = returns.iloc[1:]
         
         self.returns = returns
+        
+        # Track actual inception dates for standard assets (before any filling)
+        for col in self.returns.columns:
+            if col not in self.asset_inception_dates:  # Don't overwrite custom assets
+                first_valid = self.returns[col].first_valid_index()
+                if first_valid is not None:
+                    self.asset_inception_dates[col] = first_valid
+        
         print(f"\nComputed {freq} returns: {len(returns)} periods")
         
         return self.returns
@@ -419,6 +429,9 @@ class DataDownloader:
         print(f"\nMerging {len(custom_returns)} custom assets into returns data...")
         
         for asset_name, returns in custom_returns.items():
+            # Store the ACTUAL inception date before any filling
+            if len(returns) > 0:
+                self.asset_inception_dates[asset_name] = returns.index[0]
             # Detect if monthly or daily
             if len(returns) > 1:
                 avg_diff = (returns.index[1:] - returns.index[:-1]).mean()

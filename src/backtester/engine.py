@@ -495,16 +495,60 @@ class Backtester:
         # Get rebalancing frequency from config
         rebalance_freq = self.config.get('rebalancing', {}).get('frequency', 'quarterly')
         
-        # Simulate rebalanced portfolio
+        # ============================================================================
+        # PORTFOLIO DATE RANGE LOGIC (Critical for accuracy)
+        # ============================================================================
+        # 1. Select only assets with non-zero weights (> 0.1%)
+        # 2. Determine the latest inception date among selected assets
+        # 3. Filter returns data to start from that date (longest valid window)
+        # 4. This ensures we only use dates where ALL portfolio assets have real data
+        # ============================================================================
+        
+        # Step 1: Identify assets actually in this portfolio (non-zero weights only)
+        portfolio_assets = [
+            asset for asset, weight in full_weights.items() 
+            if weight > 0.001 and asset in self.returns.columns
+        ]
+        
+        # Step 2: Determine latest inception date from asset inception dates
+        # This comes from the downloader which tracks actual start dates
+        # (handles zero-filled monthly data like MAN AHL correctly)
+        latest_inception = None
+        if hasattr(self, 'downloader') and hasattr(self.downloader, 'asset_inception_dates'):
+            inception_dates = self.downloader.asset_inception_dates
+            for asset in portfolio_assets:
+                if asset in inception_dates:
+                    asset_start = inception_dates[asset]
+                    if latest_inception is None or asset_start > latest_inception:
+                        latest_inception = asset_start
+        
+        # Step 3: Filter returns to the valid date range
+        portfolio_returns_data = self.returns[portfolio_assets].copy()
+        if latest_inception is not None:
+            portfolio_returns_data = portfolio_returns_data.loc[latest_inception:]
+        
+        # Validate: Ensure we have data after filtering
+        if len(portfolio_returns_data) < 252:  # Minimum 1 year of data
+            raise ValueError(f"Insufficient data for portfolio simulation: only {len(portfolio_returns_data)} days available")
+        
+        # Step 4: Simulate rebalanced portfolio
+        # Filter weights to only include assets in the filtered returns data
+        portfolio_weights = {asset: weight for asset, weight in full_weights.items() 
+                             if asset in portfolio_returns_data.columns}
+        
         rebalanced_sim = simulate_rebalanced_portfolio(
-            returns=self.returns,
-            weights=full_weights,
+            returns=portfolio_returns_data,
+            weights=portfolio_weights,
             rebalance_frequency=rebalance_freq
         )
         
         # Use rebalanced portfolio returns for performance metrics
         portfolio_returns = rebalanced_sim['portfolio_return']
         portfolio_values = rebalanced_sim['portfolio_value']
+        
+        # Align base_returns to the same date range as portfolio_returns (after dropna)
+        # This ensures date ranges match in metadata and regime analysis
+        base_returns = base_returns.loc[portfolio_returns.index]
         
         # Add rebalancing summary to analytics
         rebal_summary = get_rebalancing_summary(rebalanced_sim)
@@ -519,12 +563,39 @@ class Backtester:
         analytics['portfolio_values'] = portfolio_values
         analytics['portfolio_returns'] = portfolio_returns
         
-        # Get portfolio data window metadata for accurate plotting
+        # ============================================================================
+        # PORTFOLIO METADATA (for reporting)
+        # ============================================================================
+        # The portfolio_start_date comes from the actual simulated returns index[0]
+        # This should match the latest_inception we calculated earlier
+        # ============================================================================
         try:
-            portfolio_start, portfolio_end, asset_inceptions = get_portfolio_data_window(
-                self.returns,
-                full_weights
-            )
+            # Get actual date range from the simulated portfolio
+            portfolio_start = portfolio_returns.index[0]
+            portfolio_end = portfolio_returns.index[-1]
+            
+            # Validation: Ensure the analysis period starts at the latest inception
+            # (within 1 day tolerance for edge cases with non-trading days)
+            if latest_inception is not None:
+                days_diff = abs((portfolio_start - latest_inception).days)
+                if days_diff > 5:  # Allow small tolerance for weekends/holidays
+                    print(f"  Warning: Portfolio start ({portfolio_start.date()}) differs from "
+                          f"latest inception ({latest_inception.date()}) by {days_diff} days")
+            
+            # Get asset inception dates ONLY for assets actually in this portfolio
+            # Use downloader's pre-computed inception dates (accurate for zero-filled custom data)
+            asset_inceptions = {}
+            for asset, weight in full_weights.items():
+                if weight > 0.001 and asset in self.returns.columns:
+                    # Prefer pre-computed inception dates from downloader
+                    if hasattr(self, 'downloader') and asset in self.downloader.asset_inception_dates:
+                        asset_inceptions[asset] = self.downloader.asset_inception_dates[asset]
+                    else:
+                        # Fallback to first_valid_index (for non-filled data)
+                        first_valid = self.returns[asset].first_valid_index()
+                        if first_valid is not None:
+                            asset_inceptions[asset] = first_valid
+            
             analytics['portfolio_metadata'] = {
                 'portfolio_start_date': portfolio_start,
                 'portfolio_end_date': portfolio_end,
