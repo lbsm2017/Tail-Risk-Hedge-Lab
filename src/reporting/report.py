@@ -89,19 +89,21 @@ def create_rolling_correlation_chart(
     asset_name: str,
     window: int = None,
     frequency: str = 'daily',
-    config: dict = None
+    config: dict = None,
+    base_name: str = 'ACWI'
 ) -> str:
     """
     Create a rolling correlation chart with crisis periods highlighted.
     
     Args:
-        base_returns: Base asset returns (ACWI)
+        base_returns: Base asset returns
         hedge_returns: Hedge asset returns
         regime_labels: Binary series (1=crisis, 0=normal)
         asset_name: Display name for the hedge asset
         window: Rolling window (if None, uses config or defaults)
         frequency: Data frequency ('daily', 'weekly', or 'monthly')
         config: Configuration dict (optional)
+        base_name: Display name for base asset (default: 'ACWI')
         
     Returns:
         Base64 encoded PNG image string for embedding in HTML
@@ -179,7 +181,7 @@ def create_rolling_correlation_chart(
     
     # Formatting
     ax.set_ylabel('Correlation', fontsize=10)
-    ax.set_title(f'{asset_name} — {window_label} Rolling Correlation vs. ACWI', 
+    ax.set_title(f'{asset_name} — {window_label} Rolling Correlation vs. {base_name}', 
                  fontsize=11, fontweight='bold', color='#1a1a2e', pad=10)
     
     # Y-axis limits
@@ -605,6 +607,7 @@ def generate_html_report(
     portfolios = results.get('portfolios', {})
     
     base_ticker = config.get('assets', {}).get('base', 'ACWI')
+    base_name = get_asset_name(base_ticker, hedge_names)
     
     # Pre-generate charts with progress bar
     charts = {}
@@ -633,7 +636,8 @@ def generate_html_report(
                     asset_name=asset_name,
                     window=None,  # Use config/defaults
                     frequency=hedge_freq,
-                    config=config
+                    config=config,
+                    base_name=base_name
                 )
                 charts[ticker] = chart_base64
                 if TQDM_AVAILABLE:
@@ -643,8 +647,6 @@ def generate_html_report(
     
     regime_method = config.get('regime', {}).get('method', 'ensemble')
     cvar_conf = config.get('metrics', {}).get('cvar_confidence', 0.95)
-    base_ticker = config.get('assets', {}).get('base', 'ACWI')
-    base_name = get_asset_name(base_ticker, hedge_names)
     
     report_date = datetime.now().strftime('%B %d, %Y')
     

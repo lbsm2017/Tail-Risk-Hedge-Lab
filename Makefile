@@ -26,6 +26,7 @@ help:
 # individual hedge analysis, portfolio optimization, and report generation
 run:
 	@echo Running backtesting pipeline...
+	make clean
 	python main.py
 
 # Run all tests
