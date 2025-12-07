@@ -38,7 +38,7 @@ tests:
 # Clean up cached files and test outputs
 # Removes Python cache files, cached prices, risk-free rate data, test reports, and temporary artifacts
 clean:
-	@echo Cleaning up cached files...
+	@echo Cleaning up cached files and test outputs...
 	@if exist tests\__pycache__ rmdir /s /q tests\__pycache__
 	@if exist src\__pycache__ rmdir /s /q src\__pycache__
 	@if exist src\backtester\__pycache__ rmdir /s /q src\backtester\__pycache__
@@ -48,8 +48,11 @@ clean:
 	@if exist src\optimization\__pycache__ rmdir /s /q src\optimization\__pycache__
 	@if exist src\regime\__pycache__ rmdir /s /q src\regime\__pycache__
 	@if exist src\reporting\__pycache__ rmdir /s /q src\reporting\__pycache__
+	@if exist __pycache__ rmdir /s /q __pycache__
+	@if exist .pytest_cache rmdir /s /q .pytest_cache
 	@if exist data\prices.parquet del /q data\prices.parquet
 	@if exist data\prices_metadata.csv del /q data\prices_metadata.csv
 	@if exist data\risk_free_rate.parquet del /q data\risk_free_rate.parquet
 	@if exist output\test_report.html del /q output\test_report.html
+	@for %%f in (output\tail_risk_analysis_*.html) do @del /q "%%f"
 	@echo Clean complete!

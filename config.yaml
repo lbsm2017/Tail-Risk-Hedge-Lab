@@ -72,7 +72,7 @@ optimization:
 
 hypothesis:
   alpha: 0.05
-  n_bootstrap: 100  # Significantly reduced for monthly CVaR performance
+  n_bootstrap: 500  # Significantly reduced for monthly CVaR performance
 
 rebalancing:
   frequency: "quarterly"  # Options: daily, weekly, monthly, quarterly, annual
