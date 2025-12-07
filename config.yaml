@@ -19,6 +19,10 @@ assets:
       name: "Intermediate Treasury (7-10 Year)"
       min_weight: 0.00
       max_weight: 0.50
+    - ticker: "SHY"
+      name: "Short Treasury (1-3 Year)"
+      min_weight: 0.00
+      max_weight: 0.30
     - ticker: "GLD"
       name: "Gold"
       min_weight: 0.00
@@ -31,11 +35,7 @@ assets:
       name: "Bitcoin"
       min_weight: 0.00
       max_weight: 0.15
-    - ticker: "ETH-USD"
-      name: "Ethereum"
-      min_weight: 0.00
-      max_weight: 0.10
-    - ticker: "DBMF"
+    - ticker: "WDTI"
       name: "Managed Futures (Trend Following)"
       min_weight: 0.00
       max_weight: 0.30

@@ -21,27 +21,17 @@ class DataDownloader:
     Downloads and manages financial data from Yahoo Finance.
     
     Attributes:
-        TICKERS (dict): Predefined ticker groups for different asset classes
         prices (pd.DataFrame): Downloaded price data
         returns (pd.DataFrame): Computed returns
+        asset_inception_dates (dict): Actual inception dates for each asset
     """
-    
-    TICKERS = {
-        'base': ['ACWI'],
-        'bonds': ['TLT', 'IEF', 'SHY'],
-        'gold': ['GLD'],
-        'silver': ['SLV'],
-        'crypto': ['BTC-USD', 'ETH-USD'],
-        'cta': ['DBMF'],
-        'vix': ['^VIX']
-    }
     
     def __init__(self, config: dict):
         """
         Initialize DataDownloader.
         
         Args:
-            config: Configuration dict with keys: start_date, end_date, cache_path
+            config: Configuration dict with keys: start_date, end_date, cache_path, assets
         """
         self.config = config
         self.start_date = config.get('start_date', '2008-04-01')
@@ -51,6 +41,37 @@ class DataDownloader:
         self.returns = None
         # Track actual asset inception dates (before any filling/merging)
         self.asset_inception_dates = {}
+        
+        # Extract tickers from config
+        self.tickers = self._extract_tickers_from_config(config)
+    
+    def _extract_tickers_from_config(self, config: dict) -> List[str]:
+        """
+        Extract all tickers from config file.
+        
+        Args:
+            config: Configuration dict
+            
+        Returns:
+            List of ticker symbols to download
+        """
+        tickers = []
+        
+        # Add base asset
+        if 'assets' in config and 'base' in config['assets']:
+            tickers.append(config['assets']['base'])
+        
+        # Add hedge assets
+        if 'assets' in config and 'hedges' in config['assets']:
+            for hedge in config['assets']['hedges']:
+                if 'ticker' in hedge:
+                    tickers.append(hedge['ticker'])
+        
+        # Always add VIX for regime detection
+        if '^VIX' not in tickers:
+            tickers.append('^VIX')
+        
+        return tickers
         
     def download_all(self, progress: bool = True) -> pd.DataFrame:
         """
@@ -62,10 +83,7 @@ class DataDownloader:
         Returns:
             DataFrame with adjusted close prices for all tickers
         """
-        # Flatten all tickers into a single list
-        all_tickers = []
-        for category, tickers in self.TICKERS.items():
-            all_tickers.extend(tickers)
+        all_tickers = self.tickers
         
         print(f"Downloading data for {len(all_tickers)} tickers from {self.start_date} to {self.end_date}...")
         
@@ -126,7 +144,7 @@ class DataDownloader:
         - Find common date range where base asset (ACWI) has data
         - Forward fill up to 5 days for minor gaps (weekends, holidays)
         - Drop columns that have >50% missing after alignment
-        - Keep assets with partial history (crypto, DBMF started later)
+        - Keep assets with partial history (crypto, WDTI started later)
         
         Returns:
             Cleaned DataFrame
@@ -154,7 +172,7 @@ class DataDownloader:
                 print(f"  {ticker}: {pct:.2f}%")
         
         # Only drop columns with >50% missing (not 20% - be more lenient)
-        # This allows assets like crypto/DBMF that started later
+        # This allows assets like crypto/WDTI that started later
         threshold = 0.50
         drop_cols = missing_pct[missing_pct > threshold * 100].index.tolist()
         if drop_cols:
@@ -292,12 +310,18 @@ class DataDownloader:
         for ticker in self.prices.columns:
             data = self.prices[ticker].dropna()
             
-            # Determine category
+            # Determine category from config
             category = 'Other'
-            for cat, tickers in self.TICKERS.items():
-                if ticker in tickers:
-                    category = cat
-                    break
+            if 'assets' in self.config:
+                if ticker == self.config['assets'].get('base'):
+                    category = 'Base'
+                elif 'hedges' in self.config['assets']:
+                    for hedge in self.config['assets']['hedges']:
+                        if hedge.get('ticker') == ticker:
+                            category = 'Hedge'
+                            break
+            if ticker == '^VIX':
+                category = 'VIX'
             
             info.append({
                 'Ticker': ticker,
@@ -509,9 +533,9 @@ class DataDownloader:
                     btc_data.index[-1].strftime('%Y-%m-%d')
                 )
         
-        # CTA period (2019+)
-        if 'DBMF' in self.prices.columns:
-            cta_data = self.prices['DBMF'].dropna()
+        # CTA period (2011+)
+        if 'WDTI' in self.prices.columns:
+            cta_data = self.prices['WDTI'].dropna()
             if len(cta_data) > 0:
                 periods['cta'] = (
                     cta_data.index[0].strftime('%Y-%m-%d'),

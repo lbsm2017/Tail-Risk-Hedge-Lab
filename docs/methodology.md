@@ -297,37 +297,54 @@ Direct optimization via scipy.optimize with constraints:
 
 ## Asset Class Analysis
 
-### Government Bonds (TLT, IEF)
+### Government Bonds
 
-**Expected behavior:** Strong safe haven in deflationary crises (2008, 2020); potential failure in inflationary shocks (2022).
+**Expected behavior:** Strong safe haven in deflationary crises; potential failure in inflationary shocks. Long-duration Treasuries (20+ year) provide maximum interest rate sensitivity, intermediate Treasuries (7-10 year) balance duration and liquidity, while short Treasuries (1-3 year) offer capital preservation with minimal interest rate risk.
 
 **Key finding from literature:** Stock-bond correlation varies by regime:
 - 2000-2022 average: **-0.31** (good hedge)
 - 1970-1999 average: **+0.35** (poor hedge during inflation)
 
-### Gold (GLD)
+**Crisis performance:** Bonds rally during deflationary crashes (2008, 2020) but struggle during inflation-driven selloffs (2022).
 
-**Expected behavior:** Classic safe haven with near-zero tail dependence to equities.
+### Gold
 
-**Key finding:** Baur & Lucey (2010) showed gold is uncorrelated on average and maintains low/negative correlation during crashes.
+**Expected behavior:** Classic safe haven with near-zero tail dependence to equities. Functions as a store of value during currency debasement and systemic financial crises.
 
-### Silver (SLV)
+**Key finding:** Baur & Lucey (2010) showed gold is uncorrelated on average and maintains low/negative correlation during crashes. Performs well during both deflationary crises and periods of elevated inflation expectations.
 
-**Expected behavior:** Weaker hedge than gold due to industrial demand component.
+### Silver
 
-**Key finding:** Safe-haven effect is shorter-lived and has weakened post-2000.
+**Expected behavior:** Weaker safe haven than gold due to significant industrial demand component (~50% of demand). More volatile due to smaller market size.
 
-### Managed Futures (DBMF)
+**Key finding:** Safe-haven properties are shorter-lived and less reliable than gold. Higher beta to gold but weaker negative correlation to equities during crises. Post-2000 safe-haven effect has diminished.
 
-**Expected behavior:** "Crisis alpha" from trend-following that can short falling markets.
+### Managed Futures / CTAs
 
-**Key finding:** CTAs generated positive returns in most crisis periods by diversifying across asset classes and quickly reducing exposure to crashing sectors.
+**Expected behavior:** "Crisis alpha" from systematic trend-following strategies that can profit from both rising and falling markets. CTAs trade across commodities, currencies, interest rates, and equity indices using momentum signals.
 
-### Bitcoin (BTC-USD) and Ethereum (ETH-USD)
+**Key finding:** CTAs generated positive returns in most crisis periods by:
+- Diversifying across multiple uncorrelated markets
+- Quickly reversing positions when trends break
+- Shorting falling equity markets during crashes
+- Capturing flight-to-quality trends in bonds and currencies
 
-**Expected behavior:** Diversifier but **not** a reliable safe haven.
+**Historical performance:** Strong returns during 2008 (+14% avg), mixed during 2020 COVID crash (some up, some flat), positive during 2022 inflation crisis as they captured commodity and rate trends.
 
-**Key finding:** Bitcoin's correlation with equities turns positive during high-volatility regimes. During March 2020 COVID crash, Bitcoin fell 39\% alongside equities.
+**Data consideration:** Public CTA ETFs have limited history (2011+). For full historical analysis back to 2008, proprietary CTA indices (SG CTA Index, BTOP50) can be imported via custom data files.
+
+### Cryptocurrencies
+
+**Expected behavior:** Diversifier during calm markets but **not** a reliable safe haven during acute crises. Bitcoin and other major cryptocurrencies exhibit "risk-on" behavior during stress.
+
+**Key finding:** Cryptocurrency correlation with equities is regime-dependent:
+- **Normal markets**: Low positive correlation (~0.2-0.4), providing diversification
+- **Crisis periods**: Correlation turns strongly positive (>0.5), failing as hedges
+- **March 2020 example**: Bitcoin fell ~40% alongside equities during initial COVID panic
+
+**Academic evidence:** Li & Chen (2024) using four-state regime-switching models confirm positive crisis correlation. Cryptocurrencies behave as risk assets, selling off during liquidity crunches when investors rush to cash and Treasuries.
+
+**Investor behavior:** Often touted as "digital gold" but empirical evidence shows they act more like high-beta tech stocks during market stress.
 
 ---
 
@@ -375,7 +392,7 @@ At each rebalance date, weights reset to target allocation.
 2. **Look-ahead in regime detection**: Markov smoother uses full sample (filtered probabilities available for real-time)
 3. **No transaction costs**: Rebalancing simulation doesn't include bid-ask spreads or commissions
 4. **Single baseline**: Only ACWI tested; could extend to other equity benchmarks
-5. **Limited CTA history**: DBMF starts 2019, limiting long-term analysis
+5. **Limited CTA history**: WDTI starts March 2011, limiting 2008-2010 crisis analysis
 
 ### Potential Extensions
 
@@ -385,6 +402,7 @@ At each rebalance date, weights reset to target allocation.
 4. **Options overlay**: Compare explicit tail hedges (puts) vs. asset-based hedges
 5. **Regime-conditional allocation**: Dynamic weights based on current regime probability
 6. **Inflation regime overlay**: Adjust bond allocation based on inflation expectations
+7. **CTA index data import**: Use SG CTA Index or BTOP50 for full 2008+ coverage
 
 ---
 

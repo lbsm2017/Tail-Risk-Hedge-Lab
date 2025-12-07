@@ -158,7 +158,10 @@ class Backtester:
             with open(config_path, 'r') as f:
                 self.config = yaml.safe_load(f)
         
-        self.downloader = DataDownloader(self.config['data'])
+        # Pass full config to downloader so it can extract tickers from assets section
+        data_config = self.config['data'].copy()
+        data_config['assets'] = self.config.get('assets', {})
+        self.downloader = DataDownloader(data_config)
         self.regime_detector = RegimeDetector(self.config['regime'])
         
         self.prices = None

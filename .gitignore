@@ -28,6 +28,7 @@ data/import/
 
 # Cached price data (regenerated on run)
 data/prices.parquet
+data/prices_metadata.csv
 
 # Private documentation
 docs/private/
