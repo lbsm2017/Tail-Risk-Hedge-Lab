@@ -26,6 +26,7 @@ main.py → Backtester.run_full_backtest() → HTML Report
 - Central orchestrator using `ThreadPoolExecutor` for parallel hedge analysis
 - Worker function `_analyze_hedge_worker()` is module-level (not method) for pickle compatibility
 - Loads config via `yaml.safe_load()` from `config.yaml`
+- **Individual hedge testing**: Finds MINIMAL weight to achieve target risk reduction, applies quarterly rebalancing
 
 ### Adding New Hedge Assets
 1. Add ticker to `config.yaml` under `assets.hedges` with `min_weight`/`max_weight`
@@ -71,6 +72,7 @@ regime:
 - **Docstrings**: Google-style with Args/Returns sections
 - **Progress bars**: Conditional `tqdm` import with `TQDM_AVAILABLE` fallback
 - **Parallel processing**: ThreadPoolExecutor for I/O, module-level workers for ProcessPoolExecutor
+- **Rebalancing**: Quarterly rebalancing applied via `simulate_rebalanced_portfolio()` for realistic portfolio behavior
 
 ## Report Generation (`src/reporting/report.py`)
 

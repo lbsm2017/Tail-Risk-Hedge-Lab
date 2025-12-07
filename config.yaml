@@ -56,6 +56,10 @@ metrics:
   cvar_confidence: 0.95
   cvar_frequency: "monthly"  # Options: "daily", "weekly", "monthly" - CVaR return frequency
   mar: 0.0  # Minimum acceptable return
+  rolling_windows:
+    daily: 63     # ~3 months of trading days
+    weekly: 52    # ~1 year of weeks
+    monthly: 12   # 1 year of months
   risk_free_rate:
     source: "FRED"       # "FRED" to download from FRED, "static" for fixed value
     ticker: "DGS3MO"     # FRED ticker: DGS3MO (3-month Treasury), DTB3, etc.

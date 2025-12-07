@@ -87,7 +87,9 @@ def create_rolling_correlation_chart(
     hedge_returns: pd.Series,
     regime_labels: pd.Series,
     asset_name: str,
-    window: int = 63
+    window: int = None,
+    frequency: str = 'daily',
+    config: dict = None
 ) -> str:
     """
     Create a rolling correlation chart with crisis periods highlighted.
@@ -97,11 +99,28 @@ def create_rolling_correlation_chart(
         hedge_returns: Hedge asset returns
         regime_labels: Binary series (1=crisis, 0=normal)
         asset_name: Display name for the hedge asset
-        window: Rolling window in days (default 63 = ~3 months)
+        window: Rolling window (if None, uses config or defaults)
+        frequency: Data frequency ('daily', 'weekly', or 'monthly')
+        config: Configuration dict (optional)
         
     Returns:
         Base64 encoded PNG image string for embedding in HTML
     """
+    # Determine window size from config or defaults
+    if window is None:
+        default_windows = {'daily': 63, 'weekly': 52, 'monthly': 12}
+        if config:
+            window = config.get('metrics', {}).get('rolling_windows', {}).get(frequency, default_windows.get(frequency, 63))
+        else:
+            window = default_windows.get(frequency, 63)
+    
+    # Create appropriate label
+    if frequency == 'monthly':
+        window_label = f'{window}-Month'
+    elif frequency == 'weekly':
+        window_label = f'{window}-Week'
+    else:
+        window_label = f'{window}-Day'
     # Align data
     aligned = pd.DataFrame({
         'base': base_returns,
@@ -160,7 +179,7 @@ def create_rolling_correlation_chart(
     
     # Formatting
     ax.set_ylabel('Correlation', fontsize=10)
-    ax.set_title(f'{asset_name} — {window}-Day Rolling Correlation vs. ACWI', 
+    ax.set_title(f'{asset_name} — {window_label} Rolling Correlation vs. ACWI', 
                  fontsize=11, fontweight='bold', color='#1a1a2e', pad=10)
     
     # Y-axis limits
@@ -605,12 +624,16 @@ def generate_html_report(
             
             for ticker in iterator:
                 asset_name = get_asset_name(ticker, hedge_names)
+                # Get frequency for this hedge asset
+                hedge_freq = individual_hedges.get(ticker, {}).get('data_info', {}).get('frequency', 'daily')
                 chart_base64 = create_rolling_correlation_chart(
                     base_returns=returns[base_ticker],
                     hedge_returns=returns[ticker],
                     regime_labels=regime_labels,
                     asset_name=asset_name,
-                    window=63
+                    window=None,  # Use config/defaults
+                    frequency=hedge_freq,
+                    config=config
                 )
                 charts[ticker] = chart_base64
                 if TQDM_AVAILABLE:
@@ -785,12 +808,14 @@ def generate_html_report(
         start_date = data_info.get('start_date', 'N/A')
         end_date = data_info.get('end_date', 'N/A')
         n_periods = data_info.get('periods', 0)
+        hedge_freq = data_info.get('frequency', 'daily')
+        freq_label = 'Monthly' if hedge_freq == 'monthly' else 'Daily'
         
         html += f"""
             <div class="asset-section">
                 <div class="asset-header">{asset_name} ({ticker})</div>
                 <p style="margin-bottom: 8px; color: var(--text-light);">Maximum allocation: {format_pct(max_weight * 100)} | Minimum {base_ticker}: {format_pct((1 - max_weight) * 100)}</p>
-                <p style="margin-bottom: 12px; color: var(--text-light); font-size: 9pt;">Analysis period: {start_date} to {end_date} ({n_periods:,} trading days)</p>
+                <p style="margin-bottom: 12px; color: var(--text-light); font-size: 9pt;">Analysis period: {start_date} to {end_date} ({n_periods:,} periods, {freq_label})</p>
                 
                 <table class="comparison-table">
                     <tr>
