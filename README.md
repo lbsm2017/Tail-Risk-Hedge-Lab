@@ -35,7 +35,15 @@ pip install -r requirements.txt
 
 ```bash
 python main.py
+# Or use the Makefile:
+make run
 ```
+
+**Makefile Commands:**
+- `make run` — Run the complete analysis
+- `make tests` — Run all tests to verify everything works
+- `make clean` — Delete cached data and start fresh
+- `make help` — Show available commands
 
 ### 3. View Results
 
@@ -49,18 +57,33 @@ Edit `config.yaml` to customize your analysis:
 
 ```yaml
 data:
-  start_date: "2008-04-01"  # When to start analysis
+  start_date: "2000-01-01"  # When to start analysis (ACWI inception)
   end_date: null            # null = latest available
 
 assets:
   base: "ACWI"              # Your baseline portfolio
   hedges:
     - ticker: "TLT"         # Asset ticker
-      name: "Long Treasury"
+      name: "Long Treasury (20+ Year)"
       max_weight: 0.50      # Maximum allocation allowed
+    - ticker: "IEF"
+      name: "Intermediate Treasury (7-10 Year)"
+      max_weight: 0.50
+    - ticker: "SHY"
+      name: "Short Treasury (1-3 Year)"
+      max_weight: 0.50
     - ticker: "GLD"
       name: "Gold"
       max_weight: 0.40
+    - ticker: "SLV"
+      name: "Silver"
+      max_weight: 0.25
+    - ticker: "BTC-USD"
+      name: "Bitcoin"
+      max_weight: 0.15
+    - ticker: "DBMF"
+      name: "Managed Futures (Trend Following)"
+      max_weight: 0.30
     # Add more assets...
 
 optimization:
@@ -71,12 +94,13 @@ optimization:
 
 Place Excel files in `data/import/` with two columns:
 
-| Date       | Price |
-|------------|-------|
-| 2020-01-01 | 100.0 |
-| 2020-01-02 | 101.5 |
+| Date       | Return% |
+|------------|---------|
+| 2020-01-01 | 0.5%     |
+| 2020-01-02 | -0.3%    |
+| 2020-01-03 | 1.2%     |
 
-The file name becomes the asset name (e.g., `MAN_AHL_Evolution.xlsx` → "MAN_AHL_Evolution").
+The file name becomes the asset name (e.g., `Hedgefund_XYZ.xlsx` → "MAN_AHL_Evolution").
 
 ---
 
@@ -111,7 +135,7 @@ Tail-Risk-Hedge-Lab/
 
 ---
 
-## 📚 Learn More
+## Learn More
 
 For methodology, math formulas, and academic references, see:
 - **[Full Methodology](docs/methodology.md)** — Crisis detection, risk metrics, optimization algorithms
@@ -119,7 +143,7 @@ For methodology, math formulas, and academic references, see:
 
 ---
 
-## 📄 License
+## License
 
 **Non-Commercial Use**: [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) — Free for research and personal use.
 
@@ -127,13 +151,13 @@ For methodology, math formulas, and academic references, see:
 
 ---
 
-## 📧 Contact
+## Contact
 
 **Lorenzo Bassetti** — lorenzo.bassetti@gmail.com — [@lbsm2017](https://github.com/lbsm2017)
 
 ---
 
-## ⚠️ Disclaimer
+## Disclaimer
 
 This is for research and education only. Not investment advice. Past performance doesn't guarantee future results.
 
