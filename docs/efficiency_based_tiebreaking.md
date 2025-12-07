@@ -2,16 +2,11 @@
 
 ## Overview
 
-Multi-asset portfolio optimization now uses **efficiency-based tie-breaking** instead of CAGR when multiple hedge assets provide similar risk reduction. This favors assets that deliver more risk reduction per unit weight, resulting in more cost-effective portfolios.
+Multi-asset portfolio optimization uses **efficiency-based tie-breaking**
+This favors assets that deliver more risk reduction per unit weight, resulting in more cost-effective portfolios.
 
 ## Motivation
 
-**Previous approach (CAGR tie-breaking):**
-- When multiple assets had similar risk reduction (within tolerance), selected highest CAGR
-- Problem: CAGR doesn't reflect hedging effectiveness or capital efficiency
-- Example: An asset requiring 20% allocation to achieve target is chosen over one requiring 10%
-
-**New approach (Efficiency tie-breaking):**
 - Selects assets with highest **risk reduction per weight unit**
 - Formula: `Efficiency = Achieved Reduction / Optimal Weight`
 - Favors assets that are more "capital efficient" as hedges
