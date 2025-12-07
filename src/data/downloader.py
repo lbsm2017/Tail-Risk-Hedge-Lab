@@ -15,33 +15,29 @@ from datetime import datetime
 import warnings
 warnings.filterwarnings('ignore')
 
+try:
+    import pandas_datareader as pdr
+    FRED_AVAILABLE = True
+except ImportError:
+    FRED_AVAILABLE = False
+    warnings.warn("pandas_datareader not available. FRED data download disabled.")
+
 
 class DataDownloader:
     """
     Downloads and manages financial data from Yahoo Finance.
     
     Attributes:
-        TICKERS (dict): Predefined ticker groups for different asset classes
         prices (pd.DataFrame): Downloaded price data
         returns (pd.DataFrame): Computed returns
     """
-    
-    TICKERS = {
-        'base': ['ACWI'],
-        'bonds': ['TLT', 'IEF', 'SHY'],
-        'gold': ['GLD'],
-        'silver': ['SLV'],
-        'crypto': ['BTC-USD', 'ETH-USD'],
-        'cta': ['DBMF'],
-        'vix': ['^VIX']
-    }
     
     def __init__(self, config: dict):
         """
         Initialize DataDownloader.
         
         Args:
-            config: Configuration dict with keys: start_date, end_date, cache_path
+            config: Configuration dict with keys: start_date, end_date, cache_path, plus parent config with assets
         """
         self.config = config
         self.start_date = config.get('start_date', '2008-04-01')
@@ -52,20 +48,26 @@ class DataDownloader:
         # Track actual asset inception dates (before any filling/merging)
         self.asset_inception_dates = {}
         
-    def download_all(self, progress: bool = True) -> pd.DataFrame:
+        # Build ticker list from config (passed via parent during initialization)
+        # This will be set by _build_ticker_list() after full config is available
+        self.tickers = []
+        
+    def download_all(self, progress: bool = True, full_config: dict = None) -> pd.DataFrame:
         """
         Download all tickers from Yahoo Finance.
         
         Args:
             progress: Show progress bar
+            full_config: Full configuration dict (if not already set) to extract ticker list
             
         Returns:
             DataFrame with adjusted close prices for all tickers
         """
-        # Flatten all tickers into a single list
-        all_tickers = []
-        for category, tickers in self.TICKERS.items():
-            all_tickers.extend(tickers)
+        # Build ticker list from config if not already done
+        if not self.tickers and full_config:
+            self._build_ticker_list(full_config)
+        
+        all_tickers = self.tickers
         
         print(f"Downloading data for {len(all_tickers)} tickers from {self.start_date} to {self.end_date}...")
         
@@ -117,6 +119,32 @@ class DataDownloader:
         print(f"Downloaded {len(prices)} days of data for {len(prices.columns)} assets")
         
         return self.prices
+    
+    def _build_ticker_list(self, full_config: dict) -> None:
+        """
+        Build ticker list from config.yaml.
+        
+        Args:
+            full_config: Full configuration dict with 'assets' key
+        """
+        tickers = []
+        
+        # Add base asset
+        base_ticker = full_config.get('assets', {}).get('base', 'ACWI')
+        tickers.append(base_ticker)
+        
+        # Add hedge assets
+        hedges = full_config.get('assets', {}).get('hedges', [])
+        for hedge in hedges:
+            ticker = hedge.get('ticker')
+            if ticker:
+                tickers.append(ticker)
+        
+        # Add VIX for regime detection
+        tickers.append('^VIX')
+        
+        self.tickers = tickers
+        print(f"Built ticker list from config: {', '.join(tickers)}")
     
     def align_and_clean(self) -> pd.DataFrame:
         """
@@ -277,6 +305,106 @@ class DataDownloader:
         self.returns = self.compute_returns(freq='D')
         
         return self.prices, self.returns
+    
+    def download_risk_free_rate(
+        self,
+        ticker: str = 'DGS3MO',
+        cache_path: str = 'data/risk_free_rate.parquet',
+        use_cache: bool = True
+    ) -> pd.Series:
+        """
+        Download US Treasury risk-free rate from FRED.
+        
+        Args:
+            ticker: FRED ticker symbol (default: DGS3MO = 3-month Treasury)
+            cache_path: Path to cache the risk-free rate data
+            use_cache: Whether to use cached data if available
+            
+        Returns:
+            Series of daily risk-free rates (annualized decimal, e.g., 0.04 = 4%)
+        """
+        cache_file = Path(cache_path)
+        
+        # Try to load from cache first
+        if use_cache and cache_file.exists():
+            try:
+                rf_rate = pd.read_parquet(cache_path)
+                if isinstance(rf_rate, pd.DataFrame):
+                    rf_rate = rf_rate.iloc[:, 0]  # Get first column as Series
+                print(f"Loaded risk-free rate from cache: {cache_path}")
+                print(f"  Range: {rf_rate.index[0].date()} to {rf_rate.index[-1].date()}")
+                print(f"  Mean rate: {rf_rate.mean():.2%}")
+                return rf_rate
+            except Exception as e:
+                print(f"Cache load failed, downloading: {e}")
+        
+        # Download from FRED
+        if not FRED_AVAILABLE:
+            raise ImportError(
+                "pandas_datareader is required for FRED data. "
+                "Install with: pip install pandas-datareader"
+            )
+        
+        print(f"Downloading risk-free rate ({ticker}) from FRED...")
+        print(f"  Date range: {self.start_date} to {self.end_date}")
+        
+        try:
+            # Download from FRED (uses config start_date)
+            rf_data = pdr.DataReader(ticker, 'fred', self.start_date, self.end_date)
+            
+            # Convert to Series and clean
+            if isinstance(rf_data, pd.DataFrame):
+                rf_rate = rf_data.iloc[:, 0]  # Get first column
+            else:
+                rf_rate = rf_data
+            
+            # Remove name if it exists
+            rf_rate.name = 'risk_free_rate'
+            
+            # Convert from percentage to decimal (FRED returns percentages like 4.5)
+            rf_rate = rf_rate / 100.0
+            
+            # Check if we have data from requested start_date
+            actual_start = rf_rate.first_valid_index()
+            requested_start = pd.to_datetime(self.start_date)
+            
+            if actual_start and actual_start > requested_start:
+                # FRED data doesn't go back far enough - backfill with earliest available rate
+                days_missing = (actual_start - requested_start).days
+                print(f"  Warning: FRED data starts at {actual_start.date()}, requested {requested_start.date()}")
+                print(f"  Backfilling {days_missing} days with earliest rate: {rf_rate.loc[actual_start]:.2%}")
+                
+                # Create date range from requested start to first valid FRED date
+                backfill_dates = pd.date_range(start=requested_start, end=actual_start, freq='D', inclusive='left')
+                backfill_values = pd.Series(rf_rate.loc[actual_start], index=backfill_dates)
+                
+                # Prepend backfilled data
+                rf_rate = pd.concat([backfill_values, rf_rate])
+            
+            # Handle missing data with linear interpolation
+            missing_before = rf_rate.isnull().sum()
+            if missing_before > 0:
+                rf_rate = rf_rate.interpolate(method='linear', limit_direction='both')
+                missing_after = rf_rate.isnull().sum()
+                print(f"  Interpolated {missing_before - missing_after} missing values")
+            
+            # Still have NaN at edges? Forward/backward fill
+            if rf_rate.isnull().any():
+                rf_rate = rf_rate.ffill().bfill()
+            
+            print(f"  Downloaded {len(rf_rate)} observations")
+            print(f"  Mean rate: {rf_rate.mean():.2%}")
+            print(f"  Range: {rf_rate.min():.2%} to {rf_rate.max():.2%}")
+            
+            # Cache to disk
+            cache_file.parent.mkdir(parents=True, exist_ok=True)
+            rf_rate.to_frame().to_parquet(cache_path)
+            print(f"  Cached to {cache_path}")
+            
+            return rf_rate
+            
+        except Exception as e:
+            raise RuntimeError(f"Failed to download risk-free rate from FRED: {e}")
     
     def get_asset_info(self) -> pd.DataFrame:
         """

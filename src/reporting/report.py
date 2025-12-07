@@ -456,6 +456,7 @@ def get_styles() -> str:
         
         .positive { color: var(--positive); }
         .negative { color: var(--negative); }
+        .warning { color: #ff9800; font-weight: 500; }
         
         /* Summary boxes */
         .summary-box {
@@ -653,6 +654,10 @@ def generate_html_report(
                     <span class="summary-value">{data_info.get('n_days', 0):,}</span>
                 </div>
                 <div class="summary-row">
+                    <span class="summary-label">Risk-Free Rate (Mean)</span>
+                    <span class="summary-value">{data_info.get('risk_free_rate', 0.0):.2%}</span>
+                </div>
+                <div class="summary-row">
                     <span class="summary-label">Base Portfolio</span>
                     <span class="summary-value">{base_name} ({base_ticker})</span>
                 </div>
@@ -705,10 +710,13 @@ def generate_html_report(
             <table class="comparison-table">
                 <tr>
                     <th>Asset</th>
-                    <th>Crisis Corr.</th>
-                    <th>Max Weight</th>
-                    <th>Max CVaR Reduction</th>
-                    <th>Max MDD Reduction</th>
+                    <th>Avg Corr</th>
+                    <th>Crisis Corr</th>
+                    <th>Min Corr</th>
+                    <th>Max Corr</th>
+                    <th>Corr StDev</th>
+                    <th>Max CVaR Red.</th>
+                    <th>Max MDD Red.</th>
                 </tr>
 """
     
@@ -716,40 +724,50 @@ def generate_html_report(
     for ticker, hedge_data in individual_hedges.items():
         asset_name = get_asset_name(ticker, hedge_names)
         corr = hedge_data.get('correlations', {})
+        
+        # Extract correlation metrics
         crisis_corr = corr.get('correlation_crisis', corr.get('pearson_full', 0))
+        avg_corr = corr.get('rolling_mean', corr.get('pearson_full', 0))
+        min_corr = corr.get('rolling_min', 0)
+        max_corr = corr.get('rolling_max', 0)
+        corr_std = corr.get('rolling_std', 0)
         
-        # Get max weight from config
-        max_weight = 0.50
-        for h in config.get('assets', {}).get('hedges', []):
-            if h.get('ticker') == ticker:
-                max_weight = h.get('max_weight', 0.50)
-                break
-        
-        # Find max achieved reductions
+        # Find max achieved reductions from optimization results
+        # Use the highest achieved reduction across all targets for each metric
         max_cvar_reduction = 0
         max_mdd_reduction = 0
         if hedge_data.get('optimization'):
             for opt in hedge_data['optimization']:
                 metric = opt.get('metric', '')
                 achieved = opt.get('achieved_reduction', 0)
+                # Take the maximum achieved reduction (regardless of feasibility)
+                # This represents the best reduction possible with the given constraints
                 if metric == 'cvar' and achieved > max_cvar_reduction:
                     max_cvar_reduction = achieved
                 elif metric == 'mdd' and achieved > max_mdd_reduction:
                     max_mdd_reduction = achieved
         
+        # Determine CSS classes for correlation coloring
+        avg_class = 'negative' if avg_corr < 0 else ''
+        crisis_class = 'negative' if crisis_corr < 0 else ''
+        std_class = 'warning' if corr_std > 0.30 else ''  # High volatility warning
+        
         html += f"""
                 <tr>
                     <td>{asset_name}</td>
-                    <td class="text-right {'negative' if crisis_corr < 0 else ''}">{format_num(crisis_corr)}</td>
-                    <td class="text-right">{format_pct(max_weight * 100)}</td>
-                    <td class="text-right {'positive' if max_cvar_reduction > 0 else ''}">{format_pct(max_cvar_reduction)}</td>
-                    <td class="text-right {'positive' if max_mdd_reduction > 0 else ''}">{format_pct(max_mdd_reduction)}</td>
+                    <td class="text-right {avg_class}">{format_num(avg_corr)}</td>
+                    <td class="text-right {crisis_class}">{format_num(crisis_corr)}</td>
+                    <td class="text-right">{format_num(min_corr)}</td>
+                    <td class="text-right">{format_num(max_corr)}</td>
+                    <td class="text-right {std_class}">{format_num(corr_std)}</td>
+                    <td class="text-right {'positive' if max_cvar_reduction > 0 else ''}">{format_pct(max_cvar_reduction * 100)}</td>
+                    <td class="text-right {'positive' if max_mdd_reduction > 0 else ''}">{format_pct(max_mdd_reduction * 100)}</td>
                 </tr>
 """
     
     html += """
             </table>
-            <p class="footnote">Max reductions show the best achievable risk reduction within the weight constraint for each asset.</p>
+            <p class="footnote">Correlations show time-varying relationships: negative values (green) indicate inverse movement with equities, high StDev (orange) indicates unstable hedging behavior. Max reductions show the best achievable risk reduction within weight constraints.</p>
 """
     
     # Detailed breakdown per asset
@@ -1004,7 +1022,52 @@ def generate_html_report(
         </section>
 """
     
-    html += """
+    # Extract methodology details from config
+    cvar_frequency = config.get('metrics', {}).get('cvar_frequency', 'monthly').title()
+    cvar_conf_pct = config.get('metrics', {}).get('cvar_confidence', 0.95) * 100
+    rf_source = config.get('metrics', {}).get('risk_free_rate', {}).get('source', 'FRED')
+    rf_ticker = config.get('metrics', {}).get('risk_free_rate', {}).get('ticker', 'DGS3MO')
+    rf_static = config.get('metrics', {}).get('risk_free_rate', {}).get('static_value', 0.04)
+    
+    if rf_source == 'FRED':
+        rf_description = f"Federal Reserve Economic Data ({rf_ticker})"
+    elif rf_source == 'static':
+        rf_description = f"Static rate of {rf_static:.2%}"
+    else:
+        rf_description = rf_source
+    
+    html += f"""
+        <!-- Methodology Footnote -->
+        <section style="margin-top: 3rem; padding-top: 2rem; border-top: 2px solid var(--border);">
+            <h3 style="font-size: 14px; color: var(--text-light); margin-bottom: 1rem;">Methodology & Assumptions</h3>
+            <div style="font-size: 12px; color: var(--text-light); line-height: 1.8;">
+                <p style="margin: 0.5rem 0;"><strong>CVaR (Conditional Value at Risk):</strong> 
+                Computed on <strong>{cvar_frequency.lower()}</strong> log returns at {cvar_conf_pct:.0f}% confidence level. 
+                Daily returns are aggregated to {cvar_frequency.lower()} frequency by summing log returns within each period, 
+                preserving mathematical properties of compounding. CVaR represents the expected loss in the worst 
+                {100 - cvar_conf_pct:.0f}% of outcomes.</p>
+                
+                <p style="margin: 0.5rem 0;"><strong>CAGR (Compound Annual Growth Rate):</strong> 
+                Calculated using geometric compounding: CAGR = (1 + Total Return)<sup>(1/Years)</sup> - 1. 
+                This accounts for the multiplicative nature of returns over time, providing an accurate 
+                annualized growth rate. Based on daily log returns summed over the analysis period.</p>
+                
+                <p style="margin: 0.5rem 0;"><strong>Risk-Free Rate:</strong> 
+                Sourced from <strong>{rf_description}</strong>. 
+                Used for calculating excess returns in Sharpe ratios and risk-adjusted metrics. 
+                Time-series of daily rates aligned with return data and forward-filled for missing values.</p>
+                
+                <p style="margin: 0.5rem 0;"><strong>Return Calculation:</strong> 
+                All returns are calculated as logarithmic returns: ln(P<sub>t</sub>/P<sub>t-1</sub>). 
+                Log returns are additive across time and provide symmetrical up/down movements, 
+                making them suitable for statistical analysis and aggregation across different frequencies.</p>
+                
+                <p style="margin: 0.5rem 0; margin-top: 1rem; font-style: italic; font-size: 11px;">
+                For detailed methodology, see framework documentation. All metrics are consistent throughout the analysis.
+                </p>
+            </div>
+        </section>
+        
         <footer>
             <div>Tail-Risk Hedge Analysis Framework</div>
             <div class="disclaimer">

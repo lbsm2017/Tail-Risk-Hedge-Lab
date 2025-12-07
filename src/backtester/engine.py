@@ -50,7 +50,7 @@ def _analyze_hedge_worker(args: Tuple) -> Tuple[str, Dict]:
     """
     (ticker, base_returns, hedge_returns, regime_labels, 
      targets, max_weight, weight_step, alpha, 
-     n_bootstrap, hypothesis_alpha, target_reduction) = args
+     n_bootstrap, hypothesis_alpha, target_reduction, rf_rate, cvar_frequency) = args
     
     # Align data - use all available overlapping periods
     aligned = pd.DataFrame({
@@ -89,7 +89,8 @@ def _analyze_hedge_worker(args: Tuple) -> Tuple[str, Dict]:
         metrics=['cvar', 'mdd'],
         max_weight=max_weight,
         weight_step=weight_step,
-        alpha=alpha
+        alpha=alpha,
+        cvar_frequency=cvar_frequency
     )
     
     # Hypothesis tests for primary target
@@ -107,7 +108,8 @@ def _analyze_hedge_worker(args: Tuple) -> Tuple[str, Dict]:
             hedge_weight=optimal_weight,
             regime_labels=aligned_regime,
             n_bootstrap=n_bootstrap,
-            alpha=hypothesis_alpha
+            alpha=hypothesis_alpha,
+            cvar_frequency=cvar_frequency
         )
     else:
         optimal_weight = 0.0
@@ -116,7 +118,10 @@ def _analyze_hedge_worker(args: Tuple) -> Tuple[str, Dict]:
     # Compute hedged metrics
     if optimal_weight > 0:
         hedged_returns = (1 - optimal_weight) * aligned_base + optimal_weight * aligned_hedge
-        hedged_metrics = compute_all_metrics(hedged_returns)
+        # Align risk-free rate to hedged returns
+        aligned_rf = rf_rate.reindex(hedged_returns.index, method='ffill').mean()
+        hedged_metrics = compute_all_metrics(hedged_returns, rf_rate=aligned_rf, 
+                                             cvar_frequency=cvar_frequency)
     else:
         hedged_metrics = {}
     
@@ -165,6 +170,8 @@ class Backtester:
         self.returns = None
         self.regime_labels = None
         self.vix = None
+        self.risk_free_rate = None  # Will store Series of daily risk-free rates
+        self.mean_rf_rate = 0.0     # Mean annualized risk-free rate for reporting
         
         # Number of parallel workers (-1 or None = all CPUs)
         if n_workers is None or n_workers == -1:
@@ -198,7 +205,7 @@ class Backtester:
                 use_cache = False
         
         if not use_cache:
-            self.downloader.download_all()
+            self.downloader.download_all(full_config=self.config)
             self.prices = self.downloader.align_and_clean()
             self.returns = self.downloader.compute_returns(freq='D')
             self.downloader.cache_to_disk()
@@ -223,8 +230,55 @@ class Backtester:
         if '^VIX' in self.prices.columns:
             self.vix = self.prices['^VIX']
         
+        # Load risk-free rate
+        self._load_risk_free_rate()
+        
         print(f"Date range: {self.prices.index[0]} to {self.prices.index[-1]}")
         print(f"Assets: {', '.join(self.prices.columns)}")
+    
+    def _load_risk_free_rate(self) -> None:
+        """
+        Load risk-free rate from FRED or use static value.
+        Aligns to returns date range and converts to daily.
+        """
+        rf_config = self.config.get('metrics', {}).get('risk_free_rate', {})
+        source = rf_config.get('source', 'static')
+        
+        if source == 'FRED':
+            try:
+                ticker = rf_config.get('ticker', 'DGS3MO')
+                cache_path = rf_config.get('cache_path', 'data/risk_free_rate.parquet')
+                
+                # Download risk-free rate (annualized)
+                rf_annual = self.downloader.download_risk_free_rate(
+                    ticker=ticker,
+                    cache_path=cache_path,
+                    use_cache=True
+                )
+                
+                # Align to returns date range
+                rf_annual = rf_annual.reindex(self.returns.index, method='ffill')
+                
+                # Store both annualized (for metadata) and mean
+                self.risk_free_rate = rf_annual
+                self.mean_rf_rate = rf_annual.mean()
+                
+                print(f"\nRisk-free rate loaded from FRED ({ticker})")
+                print(f"  Mean rate: {self.mean_rf_rate:.2%}")
+                print(f"  Range: {rf_annual.min():.2%} to {rf_annual.max():.2%}")
+                
+            except Exception as e:
+                print(f"\nWarning: Failed to load FRED data: {e}")
+                print("Falling back to static risk-free rate")
+                static_rate = rf_config.get('static_value', 0.04)
+                self.risk_free_rate = pd.Series(static_rate, index=self.returns.index)
+                self.mean_rf_rate = static_rate
+        else:
+            # Use static value
+            static_rate = rf_config.get('static_value', 0.04)
+            self.risk_free_rate = pd.Series(static_rate, index=self.returns.index)
+            self.mean_rf_rate = static_rate
+            print(f"\nUsing static risk-free rate: {self.mean_rf_rate:.2%}")
     
     def identify_regimes(self) -> pd.Series:
         """
@@ -317,7 +371,8 @@ class Backtester:
         # Compute performance metrics
         if optimal_weight > 0:
             hedged_returns = (1 - optimal_weight) * base_returns + optimal_weight * hedge_returns
-            hedged_metrics = compute_all_metrics(hedged_returns)
+            # Use mean risk-free rate for single hedge analysis
+            hedged_metrics = compute_all_metrics(hedged_returns, rf_rate=self.mean_rf_rate)
         else:
             hedged_metrics = {}
         
@@ -363,7 +418,9 @@ class Backtester:
                 self.config['metrics']['cvar_confidence'],
                 self.config['hypothesis']['n_bootstrap'],
                 self.config['hypothesis']['alpha'],
-                0.25  # target_reduction for hypothesis tests
+                0.25,  # target_reduction for hypothesis tests
+                self.risk_free_rate,  # risk-free rate series
+                self.config['metrics'].get('cvar_frequency', 'monthly')  # CVaR frequency
             )
             worker_args.append(args)
         
@@ -462,7 +519,8 @@ class Backtester:
                 max_total_weight=self.config['optimization']['max_total_hedge_weight'],
                 max_weights=max_weights,
                 weight_step=self.config['optimization']['weight_step'],
-                alpha=self.config['metrics']['cvar_confidence']
+                alpha=self.config['metrics']['cvar_confidence'],
+                cvar_frequency=self.config['metrics'].get('cvar_frequency', 'monthly')
             )
         elif method == 'cvar':
             weights = optimize_multi_asset_cvar(
@@ -471,7 +529,8 @@ class Backtester:
                 target_cvar_reduction=target_cvar_reduction,
                 max_total_weight=self.config['optimization']['max_total_hedge_weight'],
                 max_weights=max_weights,
-                alpha=self.config['metrics']['cvar_confidence']
+                alpha=self.config['metrics']['cvar_confidence'],
+                cvar_frequency=self.config['metrics'].get('cvar_frequency', 'monthly')
             )
         else:
             raise ValueError(f"Unknown method: {method}")
@@ -481,7 +540,9 @@ class Backtester:
             base_returns=base_returns,
             hedge_returns=hedge_returns,
             weights=weights,
-            alpha=self.config['metrics']['cvar_confidence']
+            alpha=self.config['metrics']['cvar_confidence'],
+            rf_rate=self.mean_rf_rate,
+            cvar_frequency=self.config['metrics'].get('cvar_frequency', 'monthly')
         )
         
         # Calculate regime-conditional performance
@@ -724,7 +785,8 @@ class Backtester:
                 'start_date': str(self.prices.index[0]),
                 'end_date': str(self.prices.index[-1]),
                 'n_days': len(self.prices),
-                'assets': list(self.prices.columns)
+                'assets': list(self.prices.columns),
+                'risk_free_rate': self.mean_rf_rate
             },
             'regime_stats': self.regime_detector.get_regime_statistics(self.regime_labels),
             'individual_hedges': individual_results,

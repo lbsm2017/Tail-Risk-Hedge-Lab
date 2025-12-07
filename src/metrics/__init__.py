@@ -18,12 +18,8 @@ from .correlations import (
     conditional_correlation,
     downside_beta,
     correlation_breakdown,
-    quantile_correlation
-)
-from .correlations import (
-    conditional_correlation,
-    downside_beta,
     rolling_correlation,
+    rolling_correlation_stats,
     quantile_correlation
 )
 

@@ -14,22 +14,42 @@ from ..metrics.tail_risk import cvar, max_drawdown
 
 
 def compute_portfolio_risk(
-    base_returns: np.ndarray,
-    hedge_returns: np.ndarray,
+    base_returns: pd.Series,
+    hedge_returns: pd.Series,
     weight: float,
     metric: str = 'cvar',
-    alpha: float = 0.95
+    alpha: float = 0.95,
+    base_resampled: Optional[pd.Series] = None,
+    hedge_resampled: Optional[pd.Series] = None,
+    cvar_frequency: str = 'monthly'
 ) -> float:
-    """Compute risk metric for a given hedge weight. Returns positive value for risk."""
-    portfolio = (1 - weight) * base_returns + weight * hedge_returns
+    """Compute risk metric for a given hedge weight. Returns positive value for risk.
     
+    Args:
+        base_returns: Base returns (daily)
+        hedge_returns: Hedge returns (daily)
+        weight: Hedge weight
+        metric: 'cvar' or 'mdd'
+        alpha: CVaR confidence level
+        base_resampled: Pre-resampled base returns (for performance)
+        hedge_resampled: Pre-resampled hedge returns (for performance)
+        cvar_frequency: CVaR frequency - 'daily', 'weekly', or 'monthly'
+    """
     if metric == 'cvar':
-        quantile = np.percentile(portfolio, (1 - alpha) * 100)
-        # Return absolute value (positive) for easier comparison
-        return abs(portfolio[portfolio <= quantile].mean())
+        # Use pre-resampled data if provided (for performance in grid search)
+        if base_resampled is not None and hedge_resampled is not None:
+            portfolio_resampled = (1 - weight) * base_resampled + weight * hedge_resampled
+            # Already resampled, so use daily (no resampling)
+            return cvar(portfolio_resampled, alpha=alpha, frequency='daily')
+        else:
+            # Construct portfolio returns and resample
+            portfolio = (1 - weight) * base_returns + weight * hedge_returns
+            return cvar(portfolio, alpha=alpha, frequency=cvar_frequency)
     else:  # mdd
-        cumulative = np.cumprod(1 + portfolio)
-        running_max = np.maximum.accumulate(cumulative)
+        # MDD uses cumulative product of daily returns
+        portfolio = (1 - weight) * base_returns + weight * hedge_returns
+        cumulative = (1 + portfolio).cumprod()
+        running_max = cumulative.expanding().max()
         drawdowns = (cumulative - running_max) / running_max
         # Return absolute value (positive) 
         return abs(drawdowns.min())
@@ -44,7 +64,8 @@ def find_weight_for_target_reduction(
     max_weight: float = 0.50,
     weight_step: float = 0.01,
     alpha: float = 0.95,
-    tolerance: float = 0.02
+    tolerance: float = 0.02,
+    **kwargs
 ) -> Dict:
     """
     Find hedge weight that achieves exactly the target risk reduction.
@@ -66,11 +87,30 @@ def find_weight_for_target_reduction(
     Returns:
         Dict with optimal_weight, achieved_reduction, baseline, hedged, feasible
     """
-    base_arr = base_returns.values
-    hedge_arr = hedge_returns.values
+    # Align data and keep as Series for monthly CVaR calculation
+    aligned = pd.DataFrame({
+        'base': base_returns,
+        'hedge': hedge_returns
+    }).dropna()
+    
+    base_aligned = aligned['base']
+    hedge_aligned = aligned['hedge']
+    
+    # Get CVaR frequency from kwargs or default to monthly
+    cvar_frequency = kwargs.get('cvar_frequency', 'monthly')
+    
+    # Pre-resample once for performance (if metric is CVaR and not daily)
+    if metric == 'cvar' and cvar_frequency != 'daily':
+        from ..metrics.tail_risk import resample_returns
+        base_resampled = resample_returns(base_aligned, frequency=cvar_frequency)
+        hedge_resampled = resample_returns(hedge_aligned, frequency=cvar_frequency)
+    else:
+        base_resampled = None
+        hedge_resampled = None
     
     # Calculate baseline risk (100% base asset) - returns positive value
-    baseline = compute_portfolio_risk(base_arr, hedge_arr, 0.0, metric, alpha)
+    baseline = compute_portfolio_risk(base_aligned, hedge_aligned, 0.0, metric, alpha, 
+                                     base_resampled, hedge_resampled, cvar_frequency)
     
     # Target risk value after reduction
     target_risk = baseline * (1 - target_reduction)
@@ -85,7 +125,8 @@ def find_weight_for_target_reduction(
     # First pass: find weight that gets closest to target reduction
     # while actually reducing risk
     for w in weights:
-        risk = compute_portfolio_risk(base_arr, hedge_arr, w, metric, alpha)
+        risk = compute_portfolio_risk(base_aligned, hedge_aligned, w, metric, alpha,
+                                     base_resampled, hedge_resampled, cvar_frequency)
         
         # Only consider if it reduces risk
         if risk < baseline:
@@ -132,7 +173,8 @@ def find_weights_for_all_targets(
     max_weight: float = 0.50,
     weight_step: float = 0.01,
     alpha: float = 0.95,
-    tolerance: float = 0.02
+    tolerance: float = 0.02,
+    **kwargs
 ) -> pd.DataFrame:
     """
     Find optimal weights for multiple target reductions.
@@ -163,7 +205,8 @@ def find_weights_for_all_targets(
             max_weight=max_weight,
             weight_step=weight_step,
             alpha=alpha,
-            tolerance=tolerance
+            tolerance=tolerance,
+            **kwargs
         )
     
     # All combinations
@@ -187,7 +230,8 @@ def optimize_for_multiple_targets(
     metrics: list = ['cvar', 'mdd'],
     max_weight: float = 0.50,
     weight_step: float = 0.01,
-    alpha: float = 0.95
+    alpha: float = 0.95,
+    **kwargs
 ) -> pd.DataFrame:
     """Backwards compatible wrapper."""
     return find_weights_for_all_targets(
@@ -198,7 +242,8 @@ def optimize_for_multiple_targets(
         min_weight=0.0,
         max_weight=max_weight,
         weight_step=weight_step,
-        alpha=alpha
+        alpha=alpha,
+        **kwargs
     )
 
 
