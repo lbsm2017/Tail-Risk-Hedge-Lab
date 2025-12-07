@@ -31,9 +31,9 @@ Investors holding global equities face **tail risk**—the danger of rare but se
 
 | Crisis Event | Peak-to-Trough Decline | Duration |
 |--------------|----------------------|----------|
-| 2008-2009 Global Financial Crisis | ~55\% | 17 months |
-| 2020 COVID-19 Crash | ~34\% | 1 month |
-| 2022 Inflation Bear Market | ~27\% | 10 months |
+| 2008-2009 Global Financial Crisis | ~55% | 17 months |
+| 2020 COVID-19 Crash | ~34% | 1 month |
+| 2022 Inflation Bear Market | ~27% | 10 months |
 
 Traditional portfolio analysis using **average correlations fails during crises**. Assets that appear uncorrelated in normal times may all tumble together when markets panic. This framework addresses that limitation by:
 
@@ -45,7 +45,7 @@ Traditional portfolio analysis using **average correlations fails during crises*
 ### What It Answers
 
 - Which assets provide genuine protection during equity crashes?
-- How much of each hedge asset reduces CVaR or Maximum Drawdown by 10\%, 25\%, or 50\%?
+- How much of each hedge asset reduces CVaR or Maximum Drawdown by 10%, 25%, or 50%?
 - Are these benefits statistically significant or just random chance?
 - How do correlations change during crisis periods vs. normal markets?
 
@@ -94,7 +94,7 @@ main.py → Backtester.run_full_backtest()
            │
            ├── Individual Hedge Analysis (parallel)
            │   ├── Correlation breakdown (overall, crisis, normal)
-           │   ├── Optimal weight finder for 10\%/25\%/50\% targets
+           │   ├── Optimal weight finder for 10%/25%/50% targets
            │   └── Statistical hypothesis tests
            │
            ├── Multi-Asset Portfolio Optimization
@@ -134,8 +134,8 @@ The framework identifies **crisis vs. normal market regimes** using an ensemble 
 $$D_t = \frac{P_t - M_t}{M_t}, \quad M_t = \max_{s \leq t} P_s$$
 
 **Classification:**
-- Crisis: Drawdown ≤ -10\% (configurable)
-- Normal: Drawdown > -10\%
+- Crisis: Drawdown ≤ -10% (configurable)
+- Normal: Drawdown > -10%
 
 ### 2. VIX Threshold
 
@@ -164,7 +164,7 @@ $$P(S_t = \text{Crisis} \mid \mathcal{F}_t) > 0.5 \Rightarrow \text{Crisis}$$
 
 ### 5. Ensemble (Default)
 
-**Majority voting** across all available methods. A period is classified as crisis if ≥50\% of methods agree.
+**Majority voting** across all available methods. A period is classified as crisis if ≥50% of methods agree.
 
 ---
 
@@ -180,7 +180,7 @@ $$\text{CVaR}_\alpha = -\mathbb{E}[R \mid R \leq \text{VaR}_\alpha]$$
 
 $$\text{CVaR}_{95} = -\frac{1}{|\{r_t : r_t \leq q_{5\%}\}|} \sum_{r_t \leq q_{5\%}} r_t$$
 
-*Interpretation*: CVaR₉₅ = 5.2\% means "When losses exceed the 95th percentile, the average loss is 5.2\%"
+*Interpretation*: CVaR₉₅ = 5.2% means "When losses exceed the 95th percentile, the average loss is 5.2%"
 
 ### Maximum Drawdown (MDD)
 
@@ -259,7 +259,7 @@ Tests whether an asset provides protection specifically during extreme equity do
 
 $$R_{A,t} = \alpha + \beta_0 R_{\text{equity},t} + \beta_1 D_{10\%,t} R_{\text{equity},t} + \beta_2 D_{5\%,t} R_{\text{equity},t} + \beta_3 D_{1\%,t} R_{\text{equity},t} + \varepsilon_t$$
 
-Where $D_{q\%,t}$ are dummy variables for equity returns in the worst q\% quantile.
+Where $D_{q\%,t}$ are dummy variables for equity returns in the worst q% quantile.
 
 **Interpretation:**
 - If $\beta_0 + \beta_k < 0$ for extreme quantiles, the asset is a **safe haven** during that stress level
@@ -274,17 +274,17 @@ Where $D_{q\%,t}$ are dummy variables for equity returns in the worst q\% quanti
 For each hedge asset, find the weight that achieves target risk reduction:
 
 1. Create portfolio: $(1-w) \times \text{ACWI} + w \times \text{Hedge}$
-2. Compute CVaR and MDD for weights $w \in [0, w_{\max}]$ at 1\% increments
-3. Find smallest $w$ where reduction ≥ target (10\%, 25\%, 50\%)
+2. Compute CVaR and MDD for weights $w \in [0, w_{\max}]$ at 1% increments
+3. Find smallest $w$ where reduction ≥ target (10%, 25%, 50%)
 4. Report optimal weight + associated metrics
 
 ### Multi-Asset Optimization
 
 **Greedy Sequential Allocation:**
-1. Start with 100\% equity baseline
+1. Start with 100% equity baseline
 2. Iteratively add the asset that provides best marginal CVaR reduction
 3. Continue until target reduction achieved or weight limits reached
-4. Respect minimum ACWI weight (default 33\%)
+4. Respect minimum ACWI weight (default 33%)
 
 **CVaR Minimization:**
 Direct optimization via scipy.optimize with constraints:
@@ -327,7 +327,7 @@ Direct optimization via scipy.optimize with constraints:
 
 **Expected behavior:** Diversifier but **not** a reliable safe haven.
 
-**Key finding:** Bitcoin's correlation with equities turns positive during high-volatility regimes. During March 2020 COVID crash, Bitcoin fell 39\% alongside equities.
+**Key finding:** Bitcoin's correlation with equities turns positive during high-volatility regimes. During March 2020 COVID crash, Bitcoin fell 39% alongside equities.
 
 ---
 
@@ -408,7 +408,7 @@ make tests
 
 Edit `config.yaml` to:
 - Add/remove hedge assets
-- Adjust target reduction levels (10\%, 25\%, 50\%)
+- Adjust target reduction levels (10%, 25%, 50%)
 - Change regime detection method
 - Modify weight constraints
 - Set rebalancing frequency
