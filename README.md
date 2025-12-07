@@ -7,7 +7,7 @@
 
 Tail-Risk Hedge Lab answers: *"Which assets truly protect when stocks crash, and how much should you hold?"*
 
-In an apocryphal story, a statistician who had his head in the oven and his feet in the freezer exclaimed, “On average, I feel great!”
+... a statistician who had his head in the oven and his feet in the freezer exclaimed, “On average, I feel great!”
 ---
 
 ## What It Does
