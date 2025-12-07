@@ -1,7 +1,6 @@
 # License
 
 **Tail-Risk Hedge Lab**  
-Copyright (c) 2025 Lorenzo Bassetti
 
 ---
 

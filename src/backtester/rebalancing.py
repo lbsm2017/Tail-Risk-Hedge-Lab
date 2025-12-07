@@ -1,7 +1,7 @@
 """
 Portfolio Rebalancing Module
 
-Copyright (c) 2025 L.Bassetti
+Author: L.Bassetti
 Implements periodic rebalancing to maintain target weights.
 Simulates realistic portfolio behavior with quarterly (or other frequency) resets.
 """

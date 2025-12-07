@@ -1,14 +1,14 @@
 """
 Backtesting Engine Module
 
-Copyright (c) 2025 L.Bassetti
+Author: L.Bassetti
 Main orchestration for backtesting hedge strategies.
 Optimized with parallel processing for performance.
 """
 
 import numpy as np
 import pandas as pd
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple, Optional, Union
 import yaml
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
@@ -144,16 +144,19 @@ class Backtester:
     Optimized with parallel processing.
     """
     
-    def __init__(self, config_path: str = 'config.yaml', n_workers: int = None):
+    def __init__(self, config_path: Union[str, dict] = 'config.yaml', n_workers: int = None):
         """
         Initialize backtester with configuration.
         
         Args:
-            config_path: Path to YAML configuration file
+            config_path: Path to YAML configuration file or dict with config
             n_workers: Number of parallel workers (default: CPU count)
         """
-        with open(config_path, 'r') as f:
-            self.config = yaml.safe_load(f)
+        if isinstance(config_path, dict):
+            self.config = config_path
+        else:
+            with open(config_path, 'r') as f:
+                self.config = yaml.safe_load(f)
         
         self.downloader = DataDownloader(self.config['data'])
         self.regime_detector = RegimeDetector(self.config['regime'])

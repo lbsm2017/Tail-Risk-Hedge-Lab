@@ -1,7 +1,7 @@
 """
 Regime Detection Module
 
-Copyright (c) 2025 L.Bassetti
+Author: L.Bassetti
 Implements multiple methods to identify crisis vs normal market regimes.
 """
 

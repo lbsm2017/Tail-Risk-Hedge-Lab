@@ -1,7 +1,7 @@
 """
 Statistical hypothesis testing module.
 
-Copyright (c) 2025 L.Bassetti
+Author: L.Bassetti
 """
 
 from .tests import (

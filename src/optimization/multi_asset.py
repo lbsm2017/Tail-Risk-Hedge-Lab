@@ -1,7 +1,7 @@
 """
 Multi-Asset Portfolio Optimization Module
 
-Copyright (c) 2025 L.Bassetti
+Author: L.Bassetti
 Implements portfolio construction with multiple hedge assets.
 """
 

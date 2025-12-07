@@ -1,7 +1,7 @@
 """
 Regime identification and crisis detection module.
 
-Copyright (c) 2025 L.Bassetti
+Author: L.Bassetti
 """
 
 from .detector import RegimeDetector

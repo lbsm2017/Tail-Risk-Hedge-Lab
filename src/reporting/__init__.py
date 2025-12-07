@@ -1,7 +1,7 @@
 """
 Reporting and visualization module.
 
-Copyright (c) 2025 L.Bassetti
+Author: L.Bassetti
 """
 
 from .report import (
