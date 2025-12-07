@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 from typing import Tuple, Dict, List, Optional
 from scipy.optimize import minimize
-from ..metrics.tail_risk import cvar, max_drawdown, sharpe_ratio
+from ..metrics.tail_risk import cvar, max_drawdown, sharpe_ratio, cagr
 
 
 def optimize_multi_asset_cvar(
@@ -185,7 +185,8 @@ def greedy_sequential_allocation(
     max_weights: Optional[Dict[str, float]] = None,
     weight_step: float = 0.01,
     alpha: float = 0.95,
-    cvar_frequency: str = 'monthly'
+    cvar_frequency: str = 'monthly',
+    tie_break_tolerance: float = 0.001
 ) -> Dict[str, float]:
     """
     Greedy algorithm: sequentially add hedge assets with best marginal improvement.
@@ -199,6 +200,7 @@ def greedy_sequential_allocation(
         max_weights: Dict of max weight per asset
         weight_step: Weight increment for search
         alpha: Confidence level for CVaR
+        tie_break_tolerance: Risk difference threshold for CAGR tie-breaking
         
     Returns:
         Dictionary with optimal weights
@@ -229,6 +231,8 @@ def greedy_sequential_allocation(
         best_new_risk = current_risk
         
         # Try adding weight_step to each asset
+        candidates = []  # Store all valid candidates for tie-breaking
+        
         for asset in hedge_aligned.columns:
             # Check if we can add more to this asset
             max_asset_weight = max_weights.get(asset, max_total_weight) if max_weights else max_total_weight
@@ -251,11 +255,34 @@ def greedy_sequential_allocation(
                 else:
                     test_risk, _, _ = max_drawdown((1 + test_portfolio).cumprod())
                 
-                # Check if this is best improvement
+                # Store candidate
+                candidates.append({
+                    'asset': asset,
+                    'risk': test_risk,
+                    'portfolio': test_portfolio
+                })
+                
+                # Track overall best risk
                 if test_risk < best_new_risk:
-                    best_asset = asset
-                    best_increment = weight_step
                     best_new_risk = test_risk
+        
+        # Select best asset: if multiple have similar risk, choose highest CAGR
+        if candidates:
+            # Filter candidates within tie_break_tolerance of best risk
+            top_candidates = [c for c in candidates if abs(c['risk'] - best_new_risk) <= tie_break_tolerance]
+            
+            if len(top_candidates) > 1:
+                # Multiple assets with similar risk - use CAGR tie-breaking
+                best_cagr = -np.inf
+                for candidate in top_candidates:
+                    portfolio_cagr = cagr(candidate['portfolio'].values, periods_per_year=252)
+                    if portfolio_cagr > best_cagr:
+                        best_cagr = portfolio_cagr
+                        best_asset = candidate['asset']
+            elif len(top_candidates) == 1:
+                best_asset = top_candidates[0]['asset']
+            
+            best_increment = weight_step
         
         # If no improvement found, stop
         if best_asset is None:

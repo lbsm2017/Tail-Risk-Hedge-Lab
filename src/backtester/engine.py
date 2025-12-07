@@ -50,7 +50,7 @@ def _analyze_hedge_worker(args: Tuple) -> Tuple[str, Dict]:
     """
     (ticker, base_returns, hedge_returns, regime_labels, 
      targets, max_weight, weight_step, alpha, 
-     n_bootstrap, hypothesis_alpha, target_reduction, rf_rate, cvar_frequency) = args
+     n_bootstrap, hypothesis_alpha, target_reduction, rf_rate, cvar_frequency, tie_break_tolerance) = args
     
     # Align data - use all available overlapping periods
     aligned = pd.DataFrame({
@@ -90,7 +90,8 @@ def _analyze_hedge_worker(args: Tuple) -> Tuple[str, Dict]:
         max_weight=max_weight,
         weight_step=weight_step,
         alpha=alpha,
-        cvar_frequency=cvar_frequency
+        cvar_frequency=cvar_frequency,
+        tie_break_tolerance=tie_break_tolerance
     )
     
     # Hypothesis tests for primary target
@@ -346,7 +347,8 @@ class Backtester:
             metrics=['cvar', 'mdd'],
             max_weight=self.hedge_weights.get(hedge_ticker, 0.50),
             weight_step=self.config['optimization']['weight_step'],
-            alpha=self.config['metrics']['cvar_confidence']
+            alpha=self.config['metrics']['cvar_confidence'],
+            tie_break_tolerance=self.config['optimization'].get('tie_break_tolerance', 0.001)
         )
         
         # Hypothesis tests for primary target
@@ -422,7 +424,8 @@ class Backtester:
                 self.config['hypothesis']['alpha'],
                 0.25,  # target_reduction for hypothesis tests
                 self.risk_free_rate,  # risk-free rate series
-                self.config['metrics'].get('cvar_frequency', 'monthly')  # CVaR frequency
+                self.config['metrics'].get('cvar_frequency', 'monthly'),  # CVaR frequency
+                self.config['optimization'].get('tie_break_tolerance', 0.001)  # Tie-breaking tolerance
             )
             worker_args.append(args)
         
@@ -530,7 +533,8 @@ class Backtester:
                 max_weights=max_weights,
                 weight_step=self.config['optimization']['weight_step'],
                 alpha=self.config['metrics']['cvar_confidence'],
-                cvar_frequency=self.config['metrics'].get('cvar_frequency', 'monthly')
+                cvar_frequency=self.config['metrics'].get('cvar_frequency', 'monthly'),
+                tie_break_tolerance=self.config['optimization'].get('tie_break_tolerance', 0.001)
             )
         elif method == 'cvar':
             weights = optimize_multi_asset_cvar(
