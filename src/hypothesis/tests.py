@@ -22,15 +22,15 @@ def bootstrap_cvar_test(
     confidence_level: float = 0.95
 ) -> Dict:
     """
-    Bootstrap test for CVaR reduction significance.
+    Bootstrap test for CVaR reduction significance using monthly CVaR.
     Vectorized implementation for performance.
     
     H0: Hedge does not reduce CVaR
     H1: Hedge reduces CVaR
     
     Args:
-        base_returns: Base portfolio returns
-        hedge_returns: Hedge asset returns
+        base_returns: Base portfolio returns (daily log returns with DatetimeIndex)
+        hedge_returns: Hedge asset returns (daily log returns with DatetimeIndex)
         hedge_weight: Weight allocated to hedge
         n_bootstrap: Number of bootstrap samples
         alpha: Significance level
@@ -46,37 +46,39 @@ def bootstrap_cvar_test(
     }).dropna()
     
     n = len(aligned)
-    base_arr = aligned['base'].values
-    hedge_arr = aligned['hedge'].values
     
-    # Actual portfolio
-    portfolio_returns = (1 - hedge_weight) * base_arr + hedge_weight * hedge_arr
+    # Actual portfolio (daily)
+    portfolio_returns = (1 - hedge_weight) * aligned['base'] + hedge_weight * aligned['hedge']
+    portfolio_returns.index = aligned.index  # Preserve DatetimeIndex
     
-    # Calculate actual CVaR reduction
-    base_cvar = cvar(aligned['base'], alpha=confidence_level)
-    portfolio_cvar = cvar(pd.Series(portfolio_returns), alpha=confidence_level)
+    # Calculate actual CVaR reduction using monthly resampling
+    base_cvar = cvar(aligned['base'], alpha=confidence_level, monthly=True)
+    portfolio_cvar = cvar(portfolio_returns, alpha=confidence_level, monthly=True)
     actual_reduction = base_cvar - portfolio_cvar
     
-    # Vectorized bootstrap: generate all samples at once
+    # Bootstrap: resample days with replacement, then compute monthly CVaR
     np.random.seed(42)
-    # Shape: (n_bootstrap, n)
-    bootstrap_indices = np.random.randint(0, n, size=(n_bootstrap, n))
-    shuffled_hedges = hedge_arr[bootstrap_indices]  # (n_bootstrap, n)
+    bootstrap_reductions = []
     
-    # Construct portfolios for all bootstrap samples at once
-    boot_portfolios = (1 - hedge_weight) * base_arr + hedge_weight * shuffled_hedges
+    for _ in range(n_bootstrap):
+        # Resample daily data with replacement
+        boot_indices = np.random.randint(0, n, size=n)
+        boot_base = aligned['base'].iloc[boot_indices]
+        boot_hedge = aligned['hedge'].iloc[boot_indices]
+        
+        # Preserve dates for resampling (assign original dates to maintain monthly structure)
+        boot_base.index = aligned.index
+        boot_hedge.index = aligned.index
+        
+        # Construct portfolio
+        boot_portfolio = (1 - hedge_weight) * boot_base + hedge_weight * boot_hedge
+        boot_portfolio.index = aligned.index
+        
+        # Calculate CVaR with monthly resampling
+        boot_cvar = cvar(boot_portfolio, alpha=confidence_level, monthly=True)
+        bootstrap_reductions.append(base_cvar - boot_cvar)
     
-    # Calculate CVaR for each bootstrap sample (vectorized quantile)
-    cvar_quantile = 1 - confidence_level
-    quantile_values = np.percentile(boot_portfolios, cvar_quantile * 100, axis=1)
-    
-    # CVaR is mean of values below quantile (vectorized)
-    bootstrap_cvars = np.array([
-        boot_portfolios[i, boot_portfolios[i] <= quantile_values[i]].mean()
-        for i in range(n_bootstrap)
-    ])
-    
-    bootstrap_reductions = base_cvar - bootstrap_cvars
+    bootstrap_reductions = np.array(bootstrap_reductions)
     
     # Calculate p-value (one-sided test)
     p_value = np.mean(bootstrap_reductions >= actual_reduction)
@@ -86,7 +88,7 @@ def bootstrap_cvar_test(
     ci_upper = np.percentile(bootstrap_reductions, 100 - alpha * 100 / 2)
     
     return {
-        'test': 'Bootstrap CVaR Reduction',
+        'test': 'Bootstrap CVaR Reduction (Monthly)',
         'actual_reduction': actual_reduction,
         'p_value': p_value,
         'significant': p_value < alpha,

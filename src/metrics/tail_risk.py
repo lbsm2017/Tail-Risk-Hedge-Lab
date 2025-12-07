@@ -8,23 +8,64 @@ Downside Deviation, and other risk-adjusted performance metrics.
 
 import numpy as np
 import pandas as pd
-from typing import Tuple, Optional
+from typing import Tuple, Optional, Union
 from datetime import datetime
 
 
-def cvar(returns: np.ndarray, alpha: float = 0.95) -> float:
+def resample_to_monthly(returns: Union[pd.Series, np.ndarray]) -> pd.Series:
+    """
+    Resample daily log returns to monthly log returns.
+    
+    For log returns, monthly returns are the sum of daily log returns.
+    This preserves the mathematical properties of log returns.
+    
+    Args:
+        returns: Daily log returns (Series with DatetimeIndex or array)
+        
+    Returns:
+        Monthly log returns as pandas Series
+    """
+    if isinstance(returns, np.ndarray):
+        raise ValueError("Array input not supported for resampling. Use pandas Series with DatetimeIndex.")
+    
+    if not isinstance(returns.index, pd.DatetimeIndex):
+        raise ValueError("Returns must have a DatetimeIndex for monthly resampling.")
+    
+    # Sum log returns within each month (log returns are additive)
+    monthly_returns = returns.resample('M').sum()
+    
+    return monthly_returns
+
+
+def cvar(returns: Union[pd.Series, np.ndarray], alpha: float = 0.95, monthly: bool = True) -> float:
     """
     Calculate Conditional Value at Risk (CVaR) / Expected Shortfall.
     
     CVaR is the expected loss given that the loss exceeds VaR.
     
     Args:
-        returns: Array of returns
+        returns: Array or Series of returns (log returns if using monthly resampling)
         alpha: Confidence level (e.g., 0.95 for 95%)
+        monthly: If True, resample daily returns to monthly before computing CVaR (default: True)
         
     Returns:
         CVaR value (positive number representing expected loss)
     """
+    # Handle monthly resampling for pandas Series
+    if monthly:
+        if isinstance(returns, pd.Series):
+            if isinstance(returns.index, pd.DatetimeIndex):
+                returns = resample_to_monthly(returns)
+                returns = returns.values  # Convert to array for calculation
+            else:
+                raise ValueError("Monthly CVaR requires DatetimeIndex. Pass monthly=False for array input.")
+        else:
+            raise ValueError("Monthly CVaR requires pandas Series with DatetimeIndex. Pass monthly=False for array input.")
+    
+    # Convert to numpy array if needed
+    if isinstance(returns, pd.Series):
+        returns = returns.values
+    
     if len(returns) == 0:
         return np.nan
     
@@ -416,9 +457,9 @@ def compute_all_metrics(returns: pd.Series, prices: Optional[pd.Series] = None,
         'sharpe': sharpe_ratio(ret_array, rf_rate),
         'sortino': sortino_ratio(ret_array),
         'var_95': var(ret_array, 0.95),
-        'cvar_95': cvar(ret_array, 0.95),
+        'cvar_95': cvar(returns, 0.95, monthly=True),  # Pass Series for monthly resampling
         'var_99': var(ret_array, 0.99),
-        'cvar_99': cvar(ret_array, 0.99),
+        'cvar_99': cvar(returns, 0.99, monthly=True),  # Pass Series for monthly resampling
         'downside_dev': downside_deviation(ret_array),
         'omega': omega_ratio(ret_array),
         'tail_ratio': tail_ratio(ret_array),

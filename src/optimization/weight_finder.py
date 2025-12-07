@@ -14,22 +14,40 @@ from ..metrics.tail_risk import cvar, max_drawdown
 
 
 def compute_portfolio_risk(
-    base_returns: np.ndarray,
-    hedge_returns: np.ndarray,
+    base_returns: pd.Series,
+    hedge_returns: pd.Series,
     weight: float,
     metric: str = 'cvar',
-    alpha: float = 0.95
+    alpha: float = 0.95,
+    base_monthly: Optional[pd.Series] = None,
+    hedge_monthly: Optional[pd.Series] = None
 ) -> float:
-    """Compute risk metric for a given hedge weight. Returns positive value for risk."""
-    portfolio = (1 - weight) * base_returns + weight * hedge_returns
+    """Compute risk metric for a given hedge weight. Returns positive value for risk.
     
+    Args:
+        base_returns: Base returns (daily)
+        hedge_returns: Hedge returns (daily)
+        weight: Hedge weight
+        metric: 'cvar' or 'mdd'
+        alpha: CVaR confidence level
+        base_monthly: Pre-resampled monthly base returns (for performance)
+        hedge_monthly: Pre-resampled monthly hedge returns (for performance)
+    """
     if metric == 'cvar':
-        quantile = np.percentile(portfolio, (1 - alpha) * 100)
-        # Return absolute value (positive) for easier comparison
-        return abs(portfolio[portfolio <= quantile].mean())
+        # Use pre-resampled monthly data if provided (for performance in grid search)
+        if base_monthly is not None and hedge_monthly is not None:
+            portfolio_monthly = (1 - weight) * base_monthly + weight * hedge_monthly
+            # Already monthly, so pass monthly=False
+            return cvar(portfolio_monthly, alpha=alpha, monthly=False)
+        else:
+            # Construct portfolio returns and resample
+            portfolio = (1 - weight) * base_returns + weight * hedge_returns
+            return cvar(portfolio, alpha=alpha, monthly=True)
     else:  # mdd
-        cumulative = np.cumprod(1 + portfolio)
-        running_max = np.maximum.accumulate(cumulative)
+        # MDD uses cumulative product of daily returns
+        portfolio = (1 - weight) * base_returns + weight * hedge_returns
+        cumulative = (1 + portfolio).cumprod()
+        running_max = cumulative.expanding().max()
         drawdowns = (cumulative - running_max) / running_max
         # Return absolute value (positive) 
         return abs(drawdowns.min())
@@ -66,11 +84,27 @@ def find_weight_for_target_reduction(
     Returns:
         Dict with optimal_weight, achieved_reduction, baseline, hedged, feasible
     """
-    base_arr = base_returns.values
-    hedge_arr = hedge_returns.values
+    # Align data and keep as Series for monthly CVaR calculation
+    aligned = pd.DataFrame({
+        'base': base_returns,
+        'hedge': hedge_returns
+    }).dropna()
+    
+    base_aligned = aligned['base']
+    hedge_aligned = aligned['hedge']
+    
+    # Pre-resample to monthly once for performance (if metric is CVaR)
+    if metric == 'cvar':
+        from ..metrics.tail_risk import resample_to_monthly
+        base_monthly = resample_to_monthly(base_aligned)
+        hedge_monthly = resample_to_monthly(hedge_aligned)
+    else:
+        base_monthly = None
+        hedge_monthly = None
     
     # Calculate baseline risk (100% base asset) - returns positive value
-    baseline = compute_portfolio_risk(base_arr, hedge_arr, 0.0, metric, alpha)
+    baseline = compute_portfolio_risk(base_aligned, hedge_aligned, 0.0, metric, alpha, 
+                                     base_monthly, hedge_monthly)
     
     # Target risk value after reduction
     target_risk = baseline * (1 - target_reduction)
@@ -85,7 +119,8 @@ def find_weight_for_target_reduction(
     # First pass: find weight that gets closest to target reduction
     # while actually reducing risk
     for w in weights:
-        risk = compute_portfolio_risk(base_arr, hedge_arr, w, metric, alpha)
+        risk = compute_portfolio_risk(base_aligned, hedge_aligned, w, metric, alpha,
+                                     base_monthly, hedge_monthly)
         
         # Only consider if it reduces risk
         if risk < baseline:

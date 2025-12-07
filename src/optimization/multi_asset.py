@@ -41,8 +41,8 @@ def optimize_multi_asset_cvar(
     
     n_assets = len(hedge_aligned.columns)
     
-    # Calculate baseline CVaR
-    baseline_cvar = cvar(base_aligned, alpha=alpha)
+    # Calculate baseline CVaR (monthly)
+    baseline_cvar = cvar(base_aligned, alpha=alpha, monthly=True)
     target_cvar = baseline_cvar * (1 - target_cvar_reduction)
     
     # Define objective: minimize CVaR
@@ -55,7 +55,7 @@ def optimize_multi_asset_cvar(
         for i, asset in enumerate(hedge_aligned.columns):
             portfolio_returns += weights[i] * hedge_aligned[asset]
         
-        return cvar(portfolio_returns, alpha=alpha)
+        return cvar(portfolio_returns, alpha=alpha, monthly=True)
     
     # Define constraint: target CVaR reduction
     def cvar_constraint(weights):
@@ -206,9 +206,9 @@ def greedy_sequential_allocation(
     base_aligned = all_data['base']
     hedge_aligned = all_data.drop('base', axis=1)
     
-    # Calculate baseline risk
+    # Calculate baseline risk (monthly CVaR)
     if metric == 'cvar':
-        baseline_risk = cvar(base_aligned, alpha=alpha)
+        baseline_risk = cvar(base_aligned, alpha=alpha, monthly=True)
     else:  # mdd
         baseline_risk, _, _ = max_drawdown((1 + base_aligned).cumprod())
     
@@ -243,9 +243,9 @@ def greedy_sequential_allocation(
                 for test_asset, w in test_weights.items():
                     test_portfolio += w * hedge_aligned[test_asset]
                 
-                # Calculate risk
+                # Calculate risk (monthly CVaR)
                 if metric == 'cvar':
-                    test_risk = cvar(test_portfolio, alpha=alpha)
+                    test_risk = cvar(test_portfolio, alpha=alpha, monthly=True)
                 else:
                     test_risk, _, _ = max_drawdown((1 + test_portfolio).cumprod())
                 
@@ -301,13 +301,13 @@ def portfolio_analytics(
         if w > 0 and asset in hedge_aligned.columns:
             portfolio_returns += w * hedge_aligned[asset]
     
-    # Calculate metrics
-    portfolio_cvar = cvar(portfolio_returns, alpha=alpha)
+    # Calculate metrics (monthly CVaR)
+    portfolio_cvar = cvar(portfolio_returns, alpha=alpha, monthly=True)
     portfolio_mdd, peak, trough = max_drawdown((1 + portfolio_returns).cumprod())
     portfolio_sharpe = sharpe_ratio(portfolio_returns, rf_rate=rf_rate)
     
-    # Baseline metrics
-    baseline_cvar = cvar(base_aligned, alpha=alpha)
+    # Baseline metrics (monthly CVaR)
+    baseline_cvar = cvar(base_aligned, alpha=alpha, monthly=True)
     baseline_mdd, _, _ = max_drawdown((1 + base_aligned).cumprod())
     baseline_sharpe = sharpe_ratio(base_aligned, rf_rate=rf_rate)
     
@@ -315,9 +315,10 @@ def portfolio_analytics(
     cvar_reduction = (baseline_cvar - portfolio_cvar) / baseline_cvar * 100
     mdd_reduction = (baseline_mdd - portfolio_mdd) / baseline_mdd * 100
     
-    # Returns
-    portfolio_cagr = (portfolio_returns.mean() * 252) * 100
-    baseline_cagr = (base_aligned.mean() * 252) * 100
+    # Returns - Use proper CAGR (geometric compounding)
+    from ..metrics.tail_risk import cagr as compute_cagr
+    portfolio_cagr = compute_cagr(portfolio_returns.values, periods_per_year=252) * 100
+    baseline_cagr = compute_cagr(base_aligned.values, periods_per_year=252) * 100
     
     analytics = {
         'weights': weights,
