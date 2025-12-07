@@ -5,6 +5,8 @@ data:
   cache_path: "data/prices.parquet"
   import_folder: "data/import"  # Folder for custom Excel data files
   use_full_history: true    # Use all available data per asset (true) or common period only (false)
+  custom_assets_max_weight_individual: 0.50  # Default max allocation for Excel-imported assets (single-asset tests)
+  custom_assets_max_weight_multi: 0.30       # Default max allocation for Excel-imported assets (multi-asset portfolios)
 
 assets:
   base: "ACWI"

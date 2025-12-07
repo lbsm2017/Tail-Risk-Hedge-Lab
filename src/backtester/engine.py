@@ -220,11 +220,13 @@ class Backtester:
             self.returns = self.downloader.returns
             
             # Add custom assets to hedge config if not already there
+            # Use individual test max weight (single-asset analysis uses higher max)
+            default_max_weight = self.config.get('data', {}).get('custom_assets_max_weight_individual', 0.50)
             for asset_name in custom_data.keys():
                 if asset_name not in self.hedge_weights:
-                    self.hedge_weights[asset_name] = 0.50  # Default max weight
+                    self.hedge_weights[asset_name] = default_max_weight
                     self.hedge_names[asset_name] = asset_name  # Use filename as display name
-                    print(f"  Added custom hedge: {asset_name}")
+                    print(f"  Added custom hedge: {asset_name} (max weight: {default_max_weight:.0%})")
         
         # Extract VIX if available
         if '^VIX' in self.prices.columns:
@@ -506,8 +508,16 @@ class Backtester:
         ]
         hedge_returns = self.returns[hedge_tickers]
         
-        # Get max weights
-        max_weights = self.hedge_weights
+        # Get max weights - use multi-asset limits for custom assets
+        max_weights = {}
+        custom_multi_max = self.config.get('data', {}).get('custom_assets_max_weight_multi', 0.30)
+        for ticker in hedge_tickers:
+            # Check if this is a custom asset (not in original config hedges)
+            is_custom = ticker not in [h['ticker'] for h in self.config['assets']['hedges']]
+            if is_custom:
+                max_weights[ticker] = custom_multi_max
+            else:
+                max_weights[ticker] = self.hedge_weights[ticker]
         
         # Optimize
         if method == 'greedy':
