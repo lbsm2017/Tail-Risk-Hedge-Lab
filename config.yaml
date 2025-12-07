@@ -5,7 +5,7 @@ data:
   cache_path: "data/prices.parquet"
   import_folder: "data/import"  # Folder for custom Excel data files
   use_full_history: true    # Use all available data per asset (true) or common period only (false)
-  custom_assets_max_weight_multi: 0.15       # Default max allocation for Excel-imported assets (multi-asset portfolios)
+  custom_assets_max_weight_multi: 0.20       # Default max allocation for Excel-imported assets (multi-asset portfolios)
 
 assets:
   base: "ACWI"  # Base asset ticker (MSCI All Country World Index)
@@ -35,7 +35,7 @@ assets:
     - ticker: "CHF=X"
       name: "Swiss Franc (CHF)"
       min_weight: 0.00
-      max_weight: 0.10
+      max_weight: 0.05
     - ticker: "BTC-USD"
       name: "Bitcoin"
       min_weight: 0.00
