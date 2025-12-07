@@ -9,7 +9,7 @@ Tail-Risk Hedge Lab answers: *"Which assets truly protect when stocks crash, and
 
 ---
 
-## ✨ What It Does
+## What It Does
 
 - **Downloads market data** automatically (via Yahoo Finance or custom Excel files)
 - **Identifies crisis periods** using multiple detection methods
@@ -19,7 +19,7 @@ Tail-Risk Hedge Lab answers: *"Which assets truly protect when stocks crash, and
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ### 1. Install
 
@@ -49,7 +49,7 @@ Open the generated report in `output/tail_risk_analysis_YYYY.MM.DD.HH.MM.SS.html
 
 ---
 
-## ⚙️ Configuration
+## Configuration
 
 Edit `config.yaml` to customize your analysis:
 
@@ -102,7 +102,7 @@ The file name becomes the asset name (e.g., `Hedgefund_XYZ.xlsx` → "MAN_AHL_Ev
 
 ---
 
-## 📊 Sample Output
+## Sample Output
 
 The report includes:
 
@@ -122,7 +122,7 @@ The report includes:
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 Tail-Risk-Hedge-Lab/
