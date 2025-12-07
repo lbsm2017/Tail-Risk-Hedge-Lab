@@ -32,8 +32,7 @@ run:
 # Executes the comprehensive test suite including unit tests for main.py,
 # engine.py, and integration tests for the complete pipeline
 tests:
-	@echo Running test suite...
-	python tests/all_tests.py
+	@python tests/all_tests.py
 
 # Clean up cached files and test outputs
 # Removes Python cache files, cached prices, risk-free rate data, test reports, and temporary artifacts
