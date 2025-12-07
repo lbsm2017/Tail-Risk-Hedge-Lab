@@ -1,0 +1,90 @@
+name: Run Tests
+
+on:
+  pull_request:
+    branches: [ main ]
+  push:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        python-version: ['3.9', '3.10', '3.11']
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+    
+    - name: Cache pip packages
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Create config file
+      run: |
+        echo "Creating minimal config.yaml for testing..."
+        cat > config.yaml << 'EOF'
+        data:
+          start_date: "2020-01-01"
+          end_date: "2023-12-31"
+        
+        assets:
+          base: "ACWI"
+          hedges:
+            - ticker: "TLT"
+              name: "20+ Year Treasury"
+              max_weight: 0.50
+            - ticker: "IEF"
+              name: "7-10 Year Treasury"
+              max_weight: 0.40
+            - ticker: "GLD"
+              name: "Gold"
+              max_weight: 0.30
+        
+        regime:
+          method: "ensemble"
+          drawdown_threshold: 0.10
+          volatility_window: 60
+          volatility_threshold: 1.5
+        
+        optimization:
+          max_total_hedge_weight: 0.50
+          weight_step: 0.01
+          targets: [0.10, 0.25, 0.50]
+          tolerance: 0.02
+        
+        metrics:
+          cvar_confidence: 0.95
+        
+        rebalancing:
+          frequency: "quarterly"
+        EOF
+    
+    - name: Run tests
+      run: |
+        python tests/all_tests.py
+    
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: test-results-py${{ matrix.python-version }}
+        path: |
+          output/test_report.html
+        retention-days: 30
