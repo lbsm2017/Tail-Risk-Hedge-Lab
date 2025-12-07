@@ -373,9 +373,6 @@ At each rebalance date, weights reset to target allocation.
 
 1. **Survivorship bias**: Only analyzes assets that exist today with sufficient history
 2. **Look-ahead in regime detection**: Markov smoother uses full sample (filtered probabilities available for real-time)
-3. **No transaction costs**: Rebalancing simulation doesn't include bid-ask spreads or commissions
-4. **Single baseline**: Only ACWI tested; could extend to other equity benchmarks
-5. **Limited CTA history**: DBMF starts 2019, limiting long-term analysis
 
 ### Potential Extensions
 

@@ -31,6 +31,10 @@ assets:
       name: "Silver"
       min_weight: 0.00
       max_weight: 0.25
+    - ticker: "CHF=X"
+      name: "Swiss Franc (CHF)"
+      min_weight: 0.00
+      max_weight: 0.05
     - ticker: "BTC-USD"
       name: "Bitcoin"
       min_weight: 0.00
