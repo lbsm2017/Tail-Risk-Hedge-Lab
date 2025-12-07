@@ -257,9 +257,9 @@ $$\beta_{\text{down}} = \frac{\text{Cov}(R_H, R_E \mid R_E < 0)}{\text{Var}(R_E 
 
 Tests whether an asset provides protection specifically during extreme equity downturns:
 
-$$R_{A,t} = \alpha + \beta_0 R_{\text{equity},t} + \beta_1 D_{10\%,t} R_{\text{equity},t} + \beta_2 D_{5\%,t} R_{\text{equity},t} + \beta_3 D_{1\%,t} R_{\text{equity},t} + \varepsilon_t$$
+$$R_{A,t} = \alpha + \beta_0 R_{\text{equity},t} + \beta_1 D_{10\text{\%},t} R_{\text{equity},t} + \beta_2 D_{5\text{\%},t} R_{\text{equity},t} + \beta_3 D_{1\text{\%},t} R_{\text{equity},t} + \varepsilon_t$$
 
-Where $D_{q\%,t}$ are dummy variables for equity returns in the worst q% quantile.
+Where $D_{q\text{\%},t}$ are dummy variables for equity returns in the worst q% quantile.
 
 **Interpretation:**
 - If $\beta_0 + \beta_k < 0$ for extreme quantiles, the asset is a **safe haven** during that stress level
