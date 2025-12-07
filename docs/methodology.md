@@ -395,7 +395,7 @@ At each rebalance date, weights reset to target allocation.
 pip install -r requirements.txt
 
 # Run full analysis
-python main.py
+make run
 
 # Run tests
 make tests
@@ -417,7 +417,14 @@ Edit `config.yaml` to:
 
 ## License
 
-MIT License. This is open research intended for educational and research purposes.
+This project is licensed under a **Dual License Model**:
+
+1. **CC BY-NC 4.0** — Free for academic research, personal projects, and non-commercial open research
+2. **Commercial License** — Required for use in commercial or institutional environments
+
+See the full [License](../License.md) for details.
+
+**Contact**: lorenzo.bassetti@gmail.com for commercial licensing inquiries.
 
 ---
 
