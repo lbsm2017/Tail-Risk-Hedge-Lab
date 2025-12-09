@@ -54,7 +54,7 @@ def _analyze_hedge_worker(args: Tuple) -> Tuple[str, Dict]:
     (ticker, base_returns, hedge_returns, regime_labels, 
      targets, max_weight, weight_step, alpha, 
      n_bootstrap, hypothesis_alpha, target_reduction, rf_rate, cvar_frequency, tie_break_tolerance, 
-     hedge_frequency) = args
+     hedge_frequency, rebalance_frequency, trading_fee_bps) = args
     
     # Detect if hedge data is monthly (sparse observations)
     # If hedge is monthly, resample base to monthly for fair comparison
@@ -133,7 +133,7 @@ def _analyze_hedge_worker(args: Tuple) -> Tuple[str, Dict]:
             'optimization': [],
             'hypothesis_tests': {},
             'optimal_weight': 0.0,
-            'hedged_metrics': {},
+            'base_metrics': {},  # Empty when insufficient data
             'data_info': data_info
         }
     
@@ -161,6 +161,62 @@ def _analyze_hedge_worker(args: Tuple) -> Tuple[str, Dict]:
         tie_break_tolerance=tie_break_tolerance
     )
     
+    # Determine periods_per_year based on data frequency
+    periods_per_year = 12 if hedge_frequency == 'monthly' else 252
+    
+    # Compute base (unhedged) metrics once for comparison
+    # rf_rate is already annualized from FRED (e.g., 0.04 for 4% annual)
+    # sharpe_ratio() will divide by periods_per_year internally
+    aligned_rf_annualized = rf_rate.reindex(aligned_base.index, method='ffill').mean()
+    base_metrics = compute_all_metrics(aligned_base, rf_rate=aligned_rf_annualized, 
+                                       cvar_frequency=cvar_frequency,
+                                       periods_per_year=periods_per_year)
+    
+    # Create DataFrame for rebalancing simulations
+    returns_df = pd.DataFrame({
+        'base': aligned_base,
+        'hedge': aligned_hedge
+    })
+    
+    # Enrich each optimization result with CAGR and Sharpe for that specific weight
+    enriched_opt_results = []
+    for _, row in opt_results.iterrows():
+        opt_dict = row.to_dict()
+        weight = row['optimal_weight']
+        
+        if weight > 0:
+            # Simulate portfolio with this specific weight
+            target_weights = {
+                'base': 1 - weight,
+                'hedge': weight
+            }
+            
+            rebalanced_portfolio = simulate_rebalanced_portfolio(
+                returns=returns_df,
+                weights=target_weights,
+                rebalance_frequency=rebalance_frequency,
+                initial_value=1.0,
+                trading_fee_bps=trading_fee_bps
+            )
+            
+            hedged_returns = rebalanced_portfolio['portfolio_return']
+            hedged_row_metrics = compute_all_metrics(hedged_returns, rf_rate=aligned_rf_annualized, 
+                                                     cvar_frequency=cvar_frequency,
+                                                     periods_per_year=periods_per_year)
+            
+            # Add CAGR and Sharpe to this optimization row
+            opt_dict['base_cagr'] = base_metrics.get('cagr', 0)
+            opt_dict['hedged_cagr'] = hedged_row_metrics.get('cagr', 0)
+            opt_dict['base_sharpe'] = base_metrics.get('sharpe', 0)
+            opt_dict['hedged_sharpe'] = hedged_row_metrics.get('sharpe', 0)
+        else:
+            opt_dict['base_cagr'] = base_metrics.get('cagr', 0)
+            opt_dict['hedged_cagr'] = base_metrics.get('cagr', 0)
+            opt_dict['base_sharpe'] = base_metrics.get('sharpe', 0)
+            opt_dict['hedged_sharpe'] = base_metrics.get('sharpe', 0)
+        
+        enriched_opt_results.append(opt_dict)
+    
     # Hypothesis tests for primary target
     primary_target = opt_results[
         (opt_results['metric'] == 'cvar') & 
@@ -183,45 +239,6 @@ def _analyze_hedge_worker(args: Tuple) -> Tuple[str, Dict]:
         optimal_weight = 0.0
         hypothesis_results = {}
     
-    # Compute hedged metrics with quarterly rebalancing
-    if optimal_weight > 0:
-        # Create DataFrame with base and hedge returns
-        returns_df = pd.DataFrame({
-            'base': aligned_base,
-            'hedge': aligned_hedge
-        })
-        
-        # Target weights for quarterly rebalancing
-        target_weights = {
-            'base': 1 - optimal_weight,
-            'hedge': optimal_weight
-        }
-        
-        # Simulate portfolio with quarterly rebalancing
-        rebalanced_portfolio = simulate_rebalanced_portfolio(
-            returns=returns_df,
-            weights=target_weights,
-            rebalance_frequency='quarterly',
-            initial_value=1.0
-        )
-        
-        # Extract rebalanced portfolio returns
-        hedged_returns = rebalanced_portfolio['portfolio_return']
-        
-        # Align risk-free rate to hedged returns
-        aligned_rf = rf_rate.reindex(hedged_returns.index, method='ffill').mean()
-        hedged_metrics = compute_all_metrics(hedged_returns, rf_rate=aligned_rf, 
-                                             cvar_frequency=cvar_frequency)
-        
-        # Add rebalancing info to metrics
-        hedged_metrics['rebalancing'] = {
-            'frequency': 'quarterly',
-            'n_rebalances': int(rebalanced_portfolio['rebalance_flag'].sum()),
-            'avg_drift': float(rebalanced_portfolio['drift'].mean())
-        }
-    else:
-        hedged_metrics = {}
-    
     # Add data info for reporting
     # This reflects the ACTUAL analysis period (intersection of base and hedge data)
     data_info = {
@@ -229,16 +246,18 @@ def _analyze_hedge_worker(args: Tuple) -> Tuple[str, Dict]:
         'frequency': hedge_frequency,
         'start_date': str(aligned.index[0].date()),
         'end_date': str(aligned.index[-1].date()),
+        'trading_fee_bps': trading_fee_bps,
+        'rebalance_frequency': rebalance_frequency,
         'note': f'Analysis uses overlapping {hedge_frequency} periods where both base and hedge have data'
     }
     
     return ticker, {
         'ticker': ticker,
         'correlations': corr_results,
-        'optimization': opt_results.to_dict('records'),
+        'optimization': enriched_opt_results,  # Now includes CAGR/Sharpe per row
         'hypothesis_tests': hypothesis_results,
         'optimal_weight': optimal_weight,
-        'hedged_metrics': hedged_metrics,
+        'base_metrics': base_metrics,  # Unhedged baseline metrics for reference
         'data_info': data_info
     }
 
@@ -512,6 +531,9 @@ class Backtester:
         ]
         
         # Prepare arguments for parallel workers
+        rebalance_frequency = self.config['rebalancing'].get('frequency', 'quarterly')
+        trading_fee_bps = self.config['rebalancing'].get('trading_fee_bps', 0.0)
+        
         worker_args = []
         for ticker in hedge_tickers:
             # Get hedge frequency (default to daily if not found)
@@ -532,7 +554,9 @@ class Backtester:
                 self.risk_free_rate,  # risk-free rate series
                 self.config['metrics'].get('cvar_frequency', 'monthly'),  # CVaR frequency
                 self.config['optimization'].get('tie_break_tolerance', 0.001),  # Tie-breaking tolerance
-                hedge_freq  # Hedge asset frequency ('daily' or 'monthly')
+                hedge_freq,  # Hedge asset frequency ('daily' or 'monthly')
+                rebalance_frequency,  # Rebalancing frequency from config
+                trading_fee_bps  # Trading cost in basis points
             )
             worker_args.append(args)
         
@@ -710,8 +734,9 @@ class Backtester:
         full_weights = {base_asset: 1 - total_weight}
         full_weights.update(weights)
         
-        # Get rebalancing frequency from config
+        # Get rebalancing frequency and trading fee from config
         rebalance_freq = self.config.get('rebalancing', {}).get('frequency', 'quarterly')
+        trading_fee_bps = self.config.get('rebalancing', {}).get('trading_fee_bps', 0.0)
         
         # ============================================================================
         # PORTFOLIO DATE RANGE LOGIC (Critical for accuracy)
@@ -757,7 +782,8 @@ class Backtester:
         rebalanced_sim = simulate_rebalanced_portfolio(
             returns=portfolio_returns_data,
             weights=portfolio_weights,
-            rebalance_frequency=rebalance_freq
+            rebalance_frequency=rebalance_freq,
+            trading_fee_bps=trading_fee_bps
         )
         
         # Use rebalanced portfolio returns for performance metrics
@@ -774,7 +800,8 @@ class Backtester:
             'frequency': rebalance_freq,
             'n_rebalances': rebal_summary['n_rebalances'],
             'avg_drift': rebal_summary['avg_drift_at_rebalance'],
-            'max_drift': rebal_summary['max_drift_at_rebalance']
+            'max_drift': rebal_summary['max_drift_at_rebalance'],
+            'trading_fee_bps': trading_fee_bps
         }
         
         # Store portfolio values for drawdown chart
@@ -942,7 +969,9 @@ class Backtester:
                 'end_date': str(self.prices.index[-1]),
                 'n_days': len(self.prices),
                 'assets': list(self.prices.columns),
-                'risk_free_rate': self.mean_rf_rate
+                'risk_free_rate': self.mean_rf_rate,
+                'trading_fee_bps': self.config.get('rebalancing', {}).get('trading_fee_bps', 0.0),
+                'rebalance_frequency': self.config.get('rebalancing', {}).get('frequency', 'quarterly')
             },
             'regime_stats': self.regime_detector.get_regime_statistics(self.regime_labels),
             'individual_hedges': individual_results,

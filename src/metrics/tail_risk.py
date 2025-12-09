@@ -712,14 +712,18 @@ def recovery_time(prices: pd.Series) -> pd.Series:
 
 
 def compute_all_metrics(returns: pd.Series, prices: Optional[pd.Series] = None,
-                        rf_rate: float = 0.0, cvar_frequency: str = 'monthly') -> dict:
+                        rf_rate: float = 0.0, cvar_frequency: str = 'monthly',
+                        periods_per_year: int = 252) -> dict:
     """
     Compute all tail-risk and performance metrics.
     
     Args:
         returns: Series of returns
         prices: Optional series of prices
-        rf_rate: Risk-free rate
+        rf_rate: Risk-free rate (annualized)
+        cvar_frequency: Frequency for CVaR calculation ('daily', 'weekly', 'monthly')
+        periods_per_year: Number of periods per year for annualization
+                          (252=daily, 52=weekly, 12=monthly)
         
     Returns:
         Dictionary of all metrics
@@ -727,9 +731,9 @@ def compute_all_metrics(returns: pd.Series, prices: Optional[pd.Series] = None,
     ret_array = returns.values
     
     metrics = {
-        'cagr': cagr(ret_array),
-        'volatility': annualized_volatility(ret_array),
-        'sharpe': sharpe_ratio(ret_array, rf_rate),
+        'cagr': cagr(ret_array, periods_per_year=periods_per_year),
+        'volatility': annualized_volatility(ret_array, periods_per_year=periods_per_year),
+        'sharpe': sharpe_ratio(ret_array, rf_rate, periods_per_year=periods_per_year),
         'sortino': sortino_ratio(ret_array),
         'var_95': var(ret_array, 0.95),
         'cvar_95': cvar(returns, 0.95, frequency=cvar_frequency),  # Pass Series for resampling

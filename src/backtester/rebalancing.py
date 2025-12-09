@@ -53,19 +53,24 @@ def simulate_rebalanced_portfolio(
     returns: pd.DataFrame,
     weights: Dict[str, float],
     rebalance_frequency: str = "quarterly",
-    initial_value: float = 1.0
+    initial_value: float = 1.0,
+    trading_fee_bps: float = 0.0
 ) -> pd.DataFrame:
     """
     Simulate portfolio with periodic rebalancing to target weights.
     
     Between rebalance dates, weights drift based on relative asset performance.
     On rebalance dates, weights are reset to target allocations.
+    Trading fees are applied on rebalance days based on turnover.
     
     Args:
         returns: DataFrame with asset returns (columns = asset tickers)
         weights: Target weights dict {'ACWI': 0.75, 'TLT': 0.15, 'GLD': 0.10}
         rebalance_frequency: 'daily', 'weekly', 'monthly', 'quarterly', 'annual'
         initial_value: Starting portfolio value (default 1.0)
+        trading_fee_bps: Trading cost in basis points per turnover (default 0.0)
+                         Fee is applied to one-way turnover on each rebalance.
+                         First day is fee-free (initial portfolio construction).
         
     Returns:
         DataFrame with columns:
@@ -104,6 +109,12 @@ def simulate_rebalanced_portfolio(
     target_weights = current_weights.copy()
     portfolio_value = initial_value
     
+    # Trading fee as decimal (10 bps = 0.0010)
+    fee_rate = trading_fee_bps / 10000.0
+    
+    # Track if first rebalance (no fee on initial construction)
+    is_first_rebalance = True
+    
     # Simulate day by day
     for i, (date, row) in enumerate(returns.iterrows()):
         asset_returns = row.values
@@ -120,6 +131,14 @@ def simulate_rebalanced_portfolio(
         
         # Rebalance if needed
         if is_rebalance:
+            # Apply trading fee (skip first rebalance - initial portfolio construction)
+            if not is_first_rebalance and fee_rate > 0:
+                # One-way turnover = sum of absolute weight changes / 2
+                turnover = np.sum(np.abs(current_weights - target_weights)) / 2.0
+                fee_cost = turnover * fee_rate * portfolio_value
+                portfolio_value -= fee_cost
+            
+            is_first_rebalance = False
             current_weights = target_weights.copy()
         
         # Calculate portfolio return for the day
@@ -197,7 +216,8 @@ def simulate_single_hedge_rebalanced(
     base_returns: pd.Series,
     hedge_returns: pd.Series,
     hedge_weight: float,
-    rebalance_frequency: str = "quarterly"
+    rebalance_frequency: str = "quarterly",
+    trading_fee_bps: float = 0.0
 ) -> pd.DataFrame:
     """
     Convenience function for single-hedge portfolio simulation.
@@ -207,6 +227,7 @@ def simulate_single_hedge_rebalanced(
         hedge_returns: Hedge asset returns
         hedge_weight: Weight allocated to hedge (base gets 1 - hedge_weight)
         rebalance_frequency: Rebalancing frequency
+        trading_fee_bps: Trading cost in basis points per turnover (default 0.0)
         
     Returns:
         Simulation result DataFrame
@@ -225,7 +246,8 @@ def simulate_single_hedge_rebalanced(
     return simulate_rebalanced_portfolio(
         returns=returns,
         weights=weights,
-        rebalance_frequency=rebalance_frequency
+        rebalance_frequency=rebalance_frequency,
+        trading_fee_bps=trading_fee_bps
     )
 
 

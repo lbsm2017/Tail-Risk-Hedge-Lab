@@ -171,7 +171,7 @@ class TestBuildOptimalPortfolio(unittest.TestCase):
             
             with patch('src.backtester.engine.simulate_rebalanced_portfolio') as mock_sim:
                 # Capture the returns data passed to simulation
-                def capture_returns(returns, weights, rebalance_frequency):
+                def capture_returns(returns, weights, rebalance_frequency, trading_fee_bps=0.0):
                     # The returns should start from late_start (GLD inception)
                     self.assertGreaterEqual(returns.index[0], late_start)
                     # Return DataFrame matching expected structure
@@ -308,6 +308,113 @@ class TestPortfolioMetadata(unittest.TestCase):
                 # Verify dates are datetime objects
                 self.assertIsInstance(metadata['portfolio_start_date'], pd.Timestamp)
                 self.assertIsInstance(metadata['portfolio_end_date'], pd.Timestamp)
+
+
+class TestBaseMetrics(unittest.TestCase):
+    """Test base_metrics computation in individual hedge analysis."""
+    
+    def test_base_metrics_present_in_results(self):
+        """Test that base_metrics is included in individual hedge results."""
+        from src.backtester.engine import _analyze_hedge_worker
+        
+        # Setup test data
+        dates = pd.date_range('2020-01-01', periods=500, freq='D')
+        np.random.seed(42)
+        
+        base_returns = pd.Series(np.random.normal(0.0003, 0.01, len(dates)), index=dates)
+        hedge_returns = pd.Series(np.random.normal(0.0001, 0.008, len(dates)), index=dates)
+        regime_labels = pd.Series(0, index=dates)
+        rf_rate = pd.Series(0.03 / 252, index=dates)
+        
+        # Create args tuple
+        args = (
+            'TLT',  # ticker
+            base_returns,
+            hedge_returns,
+            regime_labels,
+            [0.10, 0.25],  # targets
+            0.50,  # max_weight
+            0.01,  # weight_step
+            0.95,  # alpha
+            1000,  # n_bootstrap
+            0.05,  # hypothesis_alpha
+            0.25,  # target_reduction
+            rf_rate,
+            'monthly',  # cvar_frequency
+            0.001,  # tie_break_tolerance
+            'daily',  # hedge_frequency
+            'quarterly',  # rebalance_frequency
+            10.0  # trading_fee_bps
+        )
+        
+        # Call worker
+        ticker, result = _analyze_hedge_worker(args)
+        
+        # Verify base_metrics exists
+        self.assertIn('base_metrics', result)
+        self.assertIsInstance(result['base_metrics'], dict)
+        
+        # Verify expected keys in base_metrics
+        expected_keys = ['cagr', 'sharpe', 'cvar_95', 'max_drawdown']
+        for key in expected_keys:
+            self.assertIn(key, result['base_metrics'], 
+                         f"Expected key '{key}' not found in base_metrics")
+    
+    def test_base_metrics_computed_on_same_period(self):
+        """Test that optimization results include CAGR and Sharpe per row."""
+        from src.backtester.engine import _analyze_hedge_worker
+        
+        dates = pd.date_range('2020-01-01', periods=500, freq='D')
+        np.random.seed(42)
+        
+        base_returns = pd.Series(np.random.normal(0.0003, 0.01, len(dates)), index=dates)
+        hedge_returns = pd.Series(np.random.normal(0.0001, 0.008, len(dates)), index=dates)
+        regime_labels = pd.Series(0, index=dates)
+        rf_rate = pd.Series(0.03 / 252, index=dates)
+        
+        args = (
+            'TLT', base_returns, hedge_returns, regime_labels,
+            [0.10, 0.25], 0.50, 0.01, 0.95, 1000, 0.05, 0.25,
+            rf_rate, 'monthly', 0.001, 'daily', 'quarterly', 10.0
+        )
+        
+        ticker, result = _analyze_hedge_worker(args)
+        
+        # Base metrics should exist
+        self.assertIn('base_metrics', result)
+        
+        # Optimization results should include CAGR/Sharpe per row
+        if result['optimization']:
+            for opt in result['optimization']:
+                self.assertIn('base_cagr', opt)
+                self.assertIn('hedged_cagr', opt)
+                self.assertIn('base_sharpe', opt)
+                self.assertIn('hedged_sharpe', opt)
+    
+    def test_base_metrics_empty_when_insufficient_data(self):
+        """Test that base_metrics is empty when data is insufficient."""
+        from src.backtester.engine import _analyze_hedge_worker
+        
+        # Very short period (insufficient)
+        dates = pd.date_range('2020-01-01', periods=50, freq='D')
+        np.random.seed(42)
+        
+        base_returns = pd.Series(np.random.normal(0.0003, 0.01, len(dates)), index=dates)
+        hedge_returns = pd.Series(np.random.normal(0.0001, 0.008, len(dates)), index=dates)
+        regime_labels = pd.Series(0, index=dates)
+        rf_rate = pd.Series(0.03 / 252, index=dates)
+        
+        args = (
+            'TLT', base_returns, hedge_returns, regime_labels,
+            [0.10, 0.25], 0.50, 0.01, 0.95, 1000, 0.05, 0.25,
+            rf_rate, 'monthly', 0.001, 'daily', 'quarterly', 10.0
+        )
+        
+        ticker, result = _analyze_hedge_worker(args)
+        
+        # Should have base_metrics key but empty dict
+        self.assertIn('base_metrics', result)
+        self.assertEqual(result['base_metrics'], {})
 
 
 if __name__ == '__main__':
