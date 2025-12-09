@@ -29,9 +29,10 @@ rebalancing:
 
 ### 3. Update `_analyze_hedge_worker()` in `src/backtester/engine.py`
 
-- Call `compute_all_metrics()` on aligned base returns to capture unhedged Sharpe/CAGR/CVaR/MDD
-- Pass `trading_fee_bps` from config to rebalancing simulation
-- Return `base_metrics` alongside existing `hedged_metrics` in result dictionary
+- Compute `base_metrics` (unhedged) once for the aligned period
+- For **each optimization target row**, compute CAGR and Sharpe for that specific weight
+- Each optimization result now includes: `base_cagr`, `hedged_cagr`, `base_sharpe`, `hedged_sharpe`
+- Pass `trading_fee_bps` from config to each rebalancing simulation
 
 ### 4. Update Multi-Asset Portfolio Path in `engine.py`
 
@@ -39,13 +40,15 @@ rebalancing:
 
 ### 5. Enhance HTML Report in `src/reporting/report.py`
 
-- Add "Performance Comparison" table per individual hedge showing unhedged vs. hedged:
-  - Sharpe Ratio
-  - CAGR
-  - CVaR (95%)
-  - Maximum Drawdown
-- Add columns to individual hedge summary table for Sharpe improvement and CAGR impact
-- Display trading fee assumptions in report header/methodology section
+**Individual Hedge Table Structure** (per asset):
+
+| Target | Metric | Base Risk | Hedged Risk | Weight | CAGR (Base) | CAGR (Hedged) | Sharpe (Base) | Sharpe (Hedged) | Status |
+|--------|--------|-----------|-------------|--------|-------------|---------------|---------------|-----------------|--------|
+
+- Each row shows performance metrics for that specific weight/target combination
+- CAGR and Sharpe columns are color-coded (green = improvement, red = degradation)
+- Trading fee and rebalancing frequency shown in asset header
+- **Removed**: Separate "Performance Comparison" table (now integrated into main table)
 
 ### 6. Add Comprehensive Tests
 
