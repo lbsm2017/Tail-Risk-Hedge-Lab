@@ -20,18 +20,17 @@ dist/
 # Project-specific ignores
 # -----------------------------------------------------------------------------
 
-# Generated HTML reports (timestamped outputs)
+# Generated HTML reports (all HTML in output folder and subfolders)
+output/**/*.html
 output/*.html
 
 # Custom data imports (user-provided files)
 data/import/
 
-# Cached price data (regenerated on run)
-data/prices.parquet
-.parquet 
-
-# Private documentation
-docs/private/
+# Cached price data (all parquet files in data folder and subfolders)
+data/**/*.parquet
+data/*.parquet
+data/*.csv
 
 # -----------------------------------------------------------------------------
 # Environments
@@ -40,6 +39,7 @@ docs/private/
 .venv
 venv/
 env/
+docs/private/
 
 # -----------------------------------------------------------------------------
 # Testing & Coverage
