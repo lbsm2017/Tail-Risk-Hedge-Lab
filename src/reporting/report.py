@@ -606,6 +606,11 @@ def generate_html_report(
     individual_hedges = results.get('individual_hedges', {})
     portfolios = results.get('portfolios', {})
     
+    # Extract rebalancing config (used throughout report)
+    rebalance_config = config.get('rebalancing', {})
+    default_rebalance_freq = rebalance_config.get('frequency', 'quarterly')
+    default_trading_fee = rebalance_config.get('trading_fee_bps', 0.0)
+    
     base_ticker = config.get('assets', {}).get('base', 'ACWI')
     base_name = get_asset_name(base_ticker, hedge_names)
     
@@ -663,6 +668,7 @@ def generate_html_report(
         <header>
             <div class="report-title">Tail-Risk Hedge Analysis</div>
             <div class="report-subtitle">Optimal Portfolio Protection Strategies for {base_name} ({base_ticker})</div>
+            <div class="report-subtitle" style="font-size: 14px; margin-top: 8px;">Rebalancing Frequency: {data_info.get('rebalance_frequency', default_rebalance_freq).title()} | Trading Fees: {data_info.get('trading_fee_bps', default_trading_fee):.0f} bps</div>
             <div class="report-date">{report_date}</div>
         </header>
         
@@ -688,7 +694,7 @@ def generate_html_report(
                 </div>
                 <div class="summary-row">
                     <span class="summary-label">Rebalancing Frequency</span>
-                    <span class="summary-value">{data_info.get('rebalance_frequency', 'quarterly').title()}</span>
+                    <span class="summary-value">{data_info.get('rebalance_frequency', default_rebalance_freq).title()}</span>
                 </div>
                 <div class="summary-row">
                     <span class="summary-label">Base Portfolio</span>
@@ -820,8 +826,8 @@ def generate_html_report(
         n_periods = data_info.get('periods', 0)
         hedge_freq = data_info.get('frequency', 'daily')
         freq_label = 'Monthly' if hedge_freq == 'monthly' else 'Daily'
-        trading_fee = data_info.get('trading_fee_bps', 0)
-        rebal_freq = data_info.get('rebalance_frequency', 'quarterly')
+        trading_fee = data_info.get('trading_fee_bps', default_trading_fee)
+        rebal_freq = data_info.get('rebalance_frequency', default_rebalance_freq)
         
         fee_note = f" | Trading fee: {trading_fee:.0f} bps" if trading_fee > 0 else ""
         
