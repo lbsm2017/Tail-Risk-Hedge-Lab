@@ -415,5 +415,144 @@ class TestWeightDriftBehavior(unittest.TestCase):
                 self.assertLess(next_drift, 0.05)
 
 
+class TestTradingFees(unittest.TestCase):
+    """Unit tests for trading fees in rebalancing."""
+    
+    def setUp(self):
+        """Setup common test data."""
+        self.dates = pd.date_range('2020-01-01', periods=252, freq='D')
+        np.random.seed(42)
+        self.returns = pd.DataFrame({
+            'ACWI': np.random.normal(0.0003, 0.01, 252),
+            'TLT': np.random.normal(0.0001, 0.008, 252)
+        }, index=self.dates)
+    
+    def test_fees_reduce_portfolio_value(self):
+        """Trading fees should reduce final portfolio value."""
+        weights = {'ACWI': 0.80, 'TLT': 0.20}
+        
+        # Simulate without fees
+        result_no_fees = simulate_rebalanced_portfolio(
+            self.returns, weights, rebalance_frequency='quarterly', trading_fee_bps=0.0
+        )
+        
+        # Simulate with fees
+        result_with_fees = simulate_rebalanced_portfolio(
+            self.returns, weights, rebalance_frequency='quarterly', trading_fee_bps=10.0
+        )
+        
+        # Final value with fees should be lower
+        final_value_no_fees = result_no_fees['portfolio_value'].iloc[-1]
+        final_value_with_fees = result_with_fees['portfolio_value'].iloc[-1]
+        
+        self.assertLess(final_value_with_fees, final_value_no_fees)
+        
+        # Difference should be positive but small (< 1% with 10 bps fees)
+        relative_cost = (final_value_no_fees - final_value_with_fees) / final_value_no_fees
+        self.assertGreater(relative_cost, 0)
+        self.assertLess(relative_cost, 0.01)  # Less than 1% drag
+    
+    def test_zero_fees_equals_no_fees(self):
+        """Zero fee rate should match original behavior."""
+        weights = {'ACWI': 0.80, 'TLT': 0.20}
+        
+        # Simulate without fees parameter (default 0)
+        result_default = simulate_rebalanced_portfolio(
+            self.returns, weights, rebalance_frequency='quarterly'
+        )
+        
+        # Simulate with explicit zero fees
+        result_zero_fees = simulate_rebalanced_portfolio(
+            self.returns, weights, rebalance_frequency='quarterly', trading_fee_bps=0.0
+        )
+        
+        # Should be identical
+        pd.testing.assert_series_equal(
+            result_default['portfolio_value'],
+            result_zero_fees['portfolio_value']
+        )
+    
+    def test_fee_calculation_on_turnover(self):
+        """Fees should be proportional to turnover, not total value."""
+        weights = {'ACWI': 0.80, 'TLT': 0.20}
+        
+        # Simulate without fees and with fees
+        result_no_fees = simulate_rebalanced_portfolio(
+            self.returns, weights, rebalance_frequency='quarterly', trading_fee_bps=0.0
+        )
+        result_10bps = simulate_rebalanced_portfolio(
+            self.returns, weights, rebalance_frequency='quarterly', trading_fee_bps=10.0
+        )
+        result_20bps = simulate_rebalanced_portfolio(
+            self.returns, weights, rebalance_frequency='quarterly', trading_fee_bps=20.0
+        )
+        
+        final_no_fees = result_no_fees['portfolio_value'].iloc[-1]
+        final_10bps = result_10bps['portfolio_value'].iloc[-1]
+        final_20bps = result_20bps['portfolio_value'].iloc[-1]
+        
+        # 20 bps should be lower than 10 bps, which should be lower than no fees
+        self.assertLess(final_20bps, final_10bps)
+        self.assertLess(final_10bps, final_no_fees)
+        
+        # Calculate fee drag
+        drag_10bps = (final_no_fees - final_10bps) / final_no_fees
+        drag_20bps = (final_no_fees - final_20bps) / final_no_fees
+        
+        # 20 bps should have roughly 2x the drag of 10 bps
+        # (within reasonable tolerance due to compounding)
+        if drag_10bps > 0:
+            ratio = drag_20bps / drag_10bps
+            self.assertGreater(ratio, 1.3)  # At least 1.3x
+            self.assertLess(ratio, 3.0)     # At most 3x
+    
+    def test_no_fees_on_first_day(self):
+        """First day should not incur trading fees (initial construction)."""
+        weights = {'ACWI': 0.80, 'TLT': 0.20}
+        
+        # Simulate with high fees to make effect visible
+        result = simulate_rebalanced_portfolio(
+            self.returns, weights, rebalance_frequency='quarterly', trading_fee_bps=100.0
+        )
+        
+        # Calculate expected first day value without fees
+        first_day_return = (0.80 * self.returns['ACWI'].iloc[0] + 
+                           0.20 * self.returns['TLT'].iloc[0])
+        expected_first = 1.0 * (1 + first_day_return)
+        
+        # Should match (no fee on first day)
+        self.assertAlmostEqual(result['portfolio_value'].iloc[0], expected_first, places=6)
+    
+    def test_high_frequency_rebalancing_increases_fees(self):
+        """More frequent rebalancing should incur more fees (with sufficient drift)."""
+        weights = {'ACWI': 0.80, 'TLT': 0.20}
+        
+        # Use higher fee to make effect more visible
+        result_quarterly = simulate_rebalanced_portfolio(
+            self.returns, weights, rebalance_frequency='quarterly', trading_fee_bps=50.0
+        )
+        
+        # Monthly rebalancing (more frequent)
+        result_monthly = simulate_rebalanced_portfolio(
+            self.returns, weights, rebalance_frequency='monthly', trading_fee_bps=50.0
+        )
+        
+        # Count rebalance events (excluding first day)
+        n_rebalances_quarterly = result_quarterly['rebalance_flag'].sum()
+        n_rebalances_monthly = result_monthly['rebalance_flag'].sum()
+        
+        # Monthly should have more rebalances
+        self.assertGreater(n_rebalances_monthly, n_rebalances_quarterly)
+        
+        # With enough rebalances, monthly should have lower final value
+        # (but only test if the difference is meaningful)
+        final_quarterly = result_quarterly['portfolio_value'].iloc[-1]
+        final_monthly = result_monthly['portfolio_value'].iloc[-1]
+        
+        # Monthly should not outperform quarterly significantly (due to more fees)
+        # Allow small tolerance for random data effects
+        self.assertLessEqual(final_monthly, final_quarterly * 1.001)
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

@@ -85,3 +85,4 @@ hypothesis:
 rebalancing:
   frequency: "quarterly"  # Options: daily, weekly, monthly, quarterly, annual
   method: "calendar"      # calendar = rebalance at end of period
+  trading_fee_bps: 10     # Trading cost in basis points per turnover (10 bps = 0.10%)

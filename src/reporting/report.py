@@ -683,6 +683,14 @@ def generate_html_report(
                     <span class="summary-value">{data_info.get('risk_free_rate', 0.0):.2%}</span>
                 </div>
                 <div class="summary-row">
+                    <span class="summary-label">Trading Fee (per turnover)</span>
+                    <span class="summary-value">{data_info.get('trading_fee_bps', 0):.0f} bps</span>
+                </div>
+                <div class="summary-row">
+                    <span class="summary-label">Rebalancing Frequency</span>
+                    <span class="summary-value">{data_info.get('rebalance_frequency', 'quarterly').title()}</span>
+                </div>
+                <div class="summary-row">
                     <span class="summary-label">Base Portfolio</span>
                     <span class="summary-value">{base_name} ({base_ticker})</span>
                 </div>
@@ -812,20 +820,28 @@ def generate_html_report(
         n_periods = data_info.get('periods', 0)
         hedge_freq = data_info.get('frequency', 'daily')
         freq_label = 'Monthly' if hedge_freq == 'monthly' else 'Daily'
+        trading_fee = data_info.get('trading_fee_bps', 0)
+        rebal_freq = data_info.get('rebalance_frequency', 'quarterly')
+        
+        fee_note = f" | Trading fee: {trading_fee:.0f} bps" if trading_fee > 0 else ""
         
         html += f"""
             <div class="asset-section">
                 <div class="asset-header">{asset_name} ({ticker})</div>
-                <p style="margin-bottom: 8px; color: var(--text-light);">Maximum allocation: {format_pct(max_weight * 100)} | Minimum {base_ticker}: {format_pct((1 - max_weight) * 100)}</p>
+                <p style="margin-bottom: 8px; color: var(--text-light);">Maximum allocation: {format_pct(max_weight * 100)} | Minimum {base_ticker}: {format_pct((1 - max_weight) * 100)} | Rebalancing: {rebal_freq.title()}{fee_note}</p>
                 <p style="margin-bottom: 12px; color: var(--text-light); font-size: 9pt;">Analysis period: {start_date} to {end_date} ({n_periods:,} periods, {freq_label})</p>
                 
                 <table class="comparison-table">
                     <tr>
                         <th>Target</th>
                         <th>Metric</th>
-                        <th>{base_ticker} Risk (Unhedged)</th>
+                        <th>{base_ticker} Risk</th>
                         <th>Hedged Risk</th>
-                        <th>Weight Used</th>
+                        <th>Weight</th>
+                        <th>CAGR ({base_ticker})</th>
+                        <th>CAGR (Hedged)</th>
+                        <th>Sharpe ({base_ticker})</th>
+                        <th>Sharpe (Hedged)</th>
                         <th>Status</th>
                     </tr>
 """
@@ -842,9 +858,15 @@ def generate_html_report(
                 baseline_risk = opt.get('baseline_risk', 0)
                 hedged_risk = opt.get('hedged_risk', 0)
                 
+                # Get CAGR and Sharpe for this row
+                base_cagr = opt.get('base_cagr', 0)
+                hedged_cagr = opt.get('hedged_cagr', 0)
+                base_sharpe = opt.get('base_sharpe', 0)
+                hedged_sharpe = opt.get('hedged_sharpe', 0)
+                
                 # Determine status with clear explanation
                 if feasible:
-                    status = f"Yes ({format_pct(achieved * 100)} reduction)"
+                    status = f"Yes ({format_pct(achieved * 100)} red.)"
                     status_class = "positive"
                 elif achieved > 0:
                     status = f"Max: {format_pct(achieved * 100)}"
@@ -853,13 +875,21 @@ def generate_html_report(
                     status = "No reduction"
                     status_class = "negative"
                 
+                # Color coding for CAGR and Sharpe changes
+                cagr_class = 'positive' if hedged_cagr > base_cagr else ('negative' if hedged_cagr < base_cagr else '')
+                sharpe_class = 'positive' if hedged_sharpe > base_sharpe else ('negative' if hedged_sharpe < base_sharpe else '')
+                
                 html += f"""
                     <tr>
-                        <td>{format_pct(target * 100)} reduction</td>
+                        <td>{format_pct(target * 100)} red.</td>
                         <td>{metric}</td>
                         <td class="text-right">{format_pct(baseline_risk * 100)}</td>
                         <td class="text-right">{format_pct(hedged_risk * 100)}</td>
                         <td class="text-right">{format_pct(weight * 100)}</td>
+                        <td class="text-right">{format_pct(base_cagr * 100)}</td>
+                        <td class="text-right {cagr_class}">{format_pct(hedged_cagr * 100)}</td>
+                        <td class="text-right">{format_num(base_sharpe)}</td>
+                        <td class="text-right {sharpe_class}">{format_num(hedged_sharpe)}</td>
                         <td class="text-center {status_class}">{status}</td>
                     </tr>
 """
