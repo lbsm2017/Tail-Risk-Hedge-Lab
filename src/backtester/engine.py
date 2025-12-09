@@ -161,10 +161,16 @@ def _analyze_hedge_worker(args: Tuple) -> Tuple[str, Dict]:
         tie_break_tolerance=tie_break_tolerance
     )
     
+    # Determine periods_per_year based on data frequency
+    periods_per_year = 12 if hedge_frequency == 'monthly' else 252
+    
     # Compute base (unhedged) metrics once for comparison
-    aligned_rf = rf_rate.reindex(aligned_base.index, method='ffill').mean()
-    base_metrics = compute_all_metrics(aligned_base, rf_rate=aligned_rf, 
-                                       cvar_frequency=cvar_frequency)
+    # rf_rate is already annualized from FRED (e.g., 0.04 for 4% annual)
+    # sharpe_ratio() will divide by periods_per_year internally
+    aligned_rf_annualized = rf_rate.reindex(aligned_base.index, method='ffill').mean()
+    base_metrics = compute_all_metrics(aligned_base, rf_rate=aligned_rf_annualized, 
+                                       cvar_frequency=cvar_frequency,
+                                       periods_per_year=periods_per_year)
     
     # Create DataFrame for rebalancing simulations
     returns_df = pd.DataFrame({
@@ -194,8 +200,9 @@ def _analyze_hedge_worker(args: Tuple) -> Tuple[str, Dict]:
             )
             
             hedged_returns = rebalanced_portfolio['portfolio_return']
-            hedged_row_metrics = compute_all_metrics(hedged_returns, rf_rate=aligned_rf, 
-                                                     cvar_frequency=cvar_frequency)
+            hedged_row_metrics = compute_all_metrics(hedged_returns, rf_rate=aligned_rf_annualized, 
+                                                     cvar_frequency=cvar_frequency,
+                                                     periods_per_year=periods_per_year)
             
             # Add CAGR and Sharpe to this optimization row
             opt_dict['base_cagr'] = base_metrics.get('cagr', 0)
